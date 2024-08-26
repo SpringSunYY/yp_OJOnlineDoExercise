@@ -343,7 +343,7 @@ vue create yuoj-frontend
 
 ### 前端项目初始化 | 组件库引入
 
-### 引入组件
+#### 引入组件
 
 > Vue Router 路由组件已自动引入，无需再引入：https://router.vuejs.org/zh/introduction.html
 
@@ -371,6 +371,309 @@ createApp(App).use(ArcoVue).use(store).use(router).mount("#app");
 ```
 
 引入一个组件，如果显示出来，就表示引入成功
+
+#### 项目通用布局
+
+新建一个布局， 在 app.vue 中引入
+
+app.vue 代码如下：
+
+```typescript
+<div id="app">
+  <BasicLayout />
+</div>
+复制代码
+```
+
+选用 arco design 的 layout 组件（https://arco.design/vue/component/layout）
+
+先把上中下布局编排好，然后再填充内容：
+
+![image.png](./assets/37dc8844-0572-4e3d-a50a-da13f6e6cc0c-1724646476709-1.png)
+
+#### 实现通用路由菜单
+
+菜单组件：https://arco.design/vue/component/menu
+
+目标：根据路由配置信息，自动生成菜单内容。实现更通用、更自动的菜单配置。
+
+步骤：
+
+1）提取通用路由文件
+
+2）菜单组件读取路由，动态渲染菜单项
+
+3）绑定跳转事件
+
+4）同步路由的更新到菜单项高亮
+
+同步高亮原理：首先点击菜单项 => 触发点击事件，跳转更新路由 => 更新路由后，同步去更新菜单栏的高亮状态。
+
+使用 Vue Router 的 afterEach 路由钩子实现：
+
+```javascript
+const router = useRouter();
+
+// 默认主页
+const selectedKeys = ref(["/"]);
+
+// 路由跳转后，更新选中的菜单项
+router.afterEach((to, from, failure) => {
+  selectedKeys.value = [to.path];
+});
+复制代码
+```
+
+#### 全局状态管理
+
+vuex：https://vuex.vuejs.org/zh/guide/（vue-cli 脚手架已自动引入）
+
+什么是全局状态管理？
+
+所有页面全局共享的变量，而不是局限在某一个页面中。
+
+适合作为全局状态的数据：已登录用户信息（每个页面几乎都要用）
+
+Vuex 的本质：给你提供了一套增删改查全局变量的 API，只不过可能多了一些功能（比如时间旅行）
+
+![img](./assets/119402cc-a78c-4576-8c71-26609d7c9f8c.png)
+
+可以直接参考购物车示例：https://github.com/vuejs/vuex/tree/main/examples/classic/shopping-cart
+
+state：存储的状态信息，比如用户信息
+
+mutation（尽量同步）：定义了对变量进行增删改（更新）的方法
+
+actions（支持异步）：执行异步操作，并且触发 mutation 的更改（actions 调用 mutation）
+
+modules（模块）：把一个大的 state（全局变量）划分为多个小模块，比如 user 专门存用户的状态信息
+
+##### 实现
+
+先在 store 目录下定义 user 模块，存储用户信息：
+
+```typescript
+// initial state
+import { StoreOptions } from "vuex";
+
+export default {
+  namespaced: true,
+  state: () => ({
+    loginUser: {
+      userName: "未登录",
+    },
+  }),
+  actions: {
+    getLoginUser({ commit, state }, payload) {
+      commit("updateUser", { userName: "鱼皮" });
+    },
+  },
+  mutations: {
+    updateUser(state, payload) {
+      state.loginUser = payload;
+    },
+  },
+} as StoreOptions<any>;
+
+复制代码
+```
+
+然后在 store 目录下定义 index.ts 文件，导入 user 模块：
+
+```typescript
+import { createStore } from "vuex";
+import user from "./user";
+
+export default createStore({
+  mutations: {},
+  actions: {},
+  modules: {
+    user,
+  },
+});
+```
+
+在 Vue 页面中可以获取已存储的状态变量：
+
+```tsx
+const store = useStore();
+store.state.user?.loginUser
+```
+
+在 Vue 页面中可以修改状态变量：
+
+> 使用 dispatch 来调用之前定义好的 actions
+
+```typescript
+store.dispatch("user/getLoginUser", {
+  userName: "鱼皮",
+});
+```
+
+#### 全局权限管理
+
+目标：能够直接以一套通用的机制，去定义哪个页面需要那些权限。而不用每个页面独立去判断权限，提高效率。
+
+思路：
+
+1. 在路由配置文件， 定义某个路由的访问权限
+2. 在全局页面组件 app.vue 中，绑定一个全局路由监听。每次访问页面时，根据用户要访问页面的路由信息，先判断用户是否有对应的访问权限。
+3. 如果有，跳转到原页面；如果没有，拦截或跳转到 401 鉴权或登录页
+
+示例代码如下：
+
+```typescript
+const router = useRouter();
+const store = useStore();
+
+router.beforeEach((to, from, next) => {
+  // 仅管理员可见，判断当前用户是否有权限
+  if (to.meta?.access === "canAdmin") {
+    if (store.state.user.loginUser?.role !== "admin") {
+      next("/noAuth");
+      return;
+    }
+  }
+  next();
+});
+```
+
+#### 优化页面布局
+
+1、底部 footer 布局优化
+
+2、优化 content、globalHeader 的样式
+
+3、优化导航栏用户名称的换行
+
+##### 通用导航栏组件 - 根据配置控制菜单的显隐
+
+1）routes.ts 给路由新增一个标志位，用于判断路由是否显隐
+
+```javascript
+  {
+    path: "/hide",
+    name: "隐藏页面",
+    component: HomeView,
+    meta: {
+      hideInMenu: true,
+    },
+  },
+```
+
+2）不要用 v-for + v-if 去条件渲染元素，这样会先循环所有的元素，导致性能的浪费
+
+推荐：先过滤只需要展示的元素数组
+
+```typescript
+// 展示在菜单的路由数组
+const visibleRoutes = routes.filter((item, index) => {
+  if (item.meta?.hideInMenu) {
+    return false;
+  }
+  return true;
+});
+```
+
+#### 根据权限隐藏菜单
+
+需求：只有具有权限的菜单，才对用户可见
+
+原理：类似上面的控制路由显示隐藏，只要判断用户没有这个权限，就直接过滤掉
+
+1）新建 access 目录，专门用一个文件来定义权限
+
+```typescript
+/**
+ * 权限定义
+ */
+const ACCESS_ENUM = {
+  NOT_LOGIN: "notLogin",
+  USER: "user",
+  ADMIN: "admin",
+};
+
+export default ACCESS_ENUM;
+```
+
+2）定义一个公用的权限校验方法
+
+为什么？因为菜单组件中要判断权限、权限拦截也要用到权限判断功能，所以抽离成公共方法
+
+创建 checkAccess.ts 文件，专门定义检测权限的函数：
+
+```typescript
+import ACCESS_ENUM from "@/access/accessEnum";
+
+/**
+ * 检查权限（判断当前登录用户是否具有某个权限）
+ * @param loginUser 当前登录用户
+ * @param needAccess 需要有的权限
+ * @return boolean 有无权限
+ */
+const checkAccess = (loginUser: any, needAccess = ACCESS_ENUM.NOT_LOGIN) => {
+  // 获取当前登录用户具有的权限（如果没有 loginUser，则表示未登录）
+  const loginUserAccess = loginUser?.userRole ?? ACCESS_ENUM.NOT_LOGIN;
+  if (needAccess === ACCESS_ENUM.NOT_LOGIN) {
+    return true;
+  }
+  // 如果用户登录才能访问
+  if (needAccess === ACCESS_ENUM.USER) {
+    // 如果用户没登录，那么表示无权限
+    if (loginUserAccess === ACCESS_ENUM.NOT_LOGIN) {
+      return false;
+    }
+  }
+  // 如果需要管理员权限
+  if (needAccess === ACCESS_ENUM.ADMIN) {
+    // 如果不为管理员，表示无权限
+    if (loginUserAccess !== ACCESS_ENUM.ADMIN) {
+      return false;
+    }
+  }
+  return true;
+};
+
+export default checkAccess;
+```
+
+3）修改 GlobalHeader 动态菜单组件，根据权限来过滤菜单
+
+注意，这里使用计算属性，是为了当登录用户信息发生变更时，触发菜单栏的重新渲染，展示新增权限的菜单项
+
+```typescript
+const visibleRoutes = computed(() => {
+  return routes.filter((item, index) => {
+    if (item.meta?.hideInMenu) {
+      return false;
+    }
+    // 根据权限过滤菜单
+    if (
+      !checkAccess(store.state.user.loginUser, item?.meta?.access as string)
+    ) {
+      return false;
+    }
+    return true;
+  });
+});
+```
+
+#### 全局项目入口
+
+app.vue 中预留一个可以编写全局初始化逻辑的代码：
+
+```typescript
+/**
+ * 全局初始化函数，有全局单次调用的代码，都可以写到这里
+ */
+const doInit = () => {
+  console.log("hello 欢迎来到我的项目");
+};
+
+onMounted(() => {
+  doInit();
+});
+```
 
 1. 前端项目初始化 | 项目通用布局开发及优化
 2. 前端项目初始化 | 全局状态管理
