@@ -675,16 +675,264 @@ onMounted(() => {
 });
 ```
 
-1. 前端项目初始化 | 项目通用布局开发及优化
-2. 前端项目初始化 | 全局状态管理
-3. 前端项目初始化 | 全局权限管理
-4. 前端项目初始化 | 通用菜单组件开发1792126029868675074_0.4013141990248197
-5. 前端项目初始化 | 全局项目入口
-6. 前端项目初始化 | 多套布局支持
-7. 后端项目初始化（Spring Boot 万用模板讲解）1792126029868675074_0.47910861742417676
-8. 前后端联调 | 用户登录页面开发
-9. 前后端联调 | 前端请求代码生成
-10. 前后端联调 | 用户自动登录1792126029868675074_0.6937294814307828
+### 后端项目初始化
+
+先把通用的后端框架跑起来。
+
+1）从星球代码库下载 springboot-init 万用模板（已经在本地的话直接复制）
+
+2）`ctrl+shift+R`全局替换 springboot-init 为项目名（yuoj-backend）
+
+3）全局替换springbootinit 包名为新的包名（yuoj）
+
+4）修改 springbootinit 文件夹的名称为新的包名对应的名称（yuoj）
+
+5）本地新建数据库，直接执行 sql/create_table.sql 脚本，修改库名为 yuoj，执行即可
+
+6）改 application.yml 配置，修改 MySQL 数据库的连接库名、账号密码，端口号（8121）
+
+#### 初始化模板讲解
+
+1）先阅读 README.md
+
+2）sql/create_table.sql 定义了数据库的初始化建库建表语句
+
+3）sql/post_es_mapping.json 帖子表在 ES 中的建表语句
+
+4）aop：用于全局权限校验、全局日志记录
+
+5）common：万用的类，比如通用响应类
+
+6）config：用于接收 application.yml 中的参数，初始化一些客户端的配置类（比如对象存储客户端）
+
+7）constant：定义常量
+
+8）controller：接受请求
+
+9）esdao：类似 mybatis 的 mapper，用于操作 ES
+
+10）exception：异常处理相关
+
+11）job：任务相关（定时任务、单次任务）
+
+12）manager：服务层（一般是定义一些公用的服务、对接第三方 API 等）
+
+13）mapper：mybatis 的数据访问层，用于操作数据库
+
+14）model：数据模型、实体类、包装类、枚举值
+
+15）service：服务层，用于编写业务逻辑
+
+16）utils：工具类，各种各样公用的方法
+
+17）wxmp：公众号相关的包
+
+18）test：单元测试
+
+19）MainApplication：项目启动入口
+
+20）Dockerfile：用于构建 Docker 镜像
+
+### 前后端联调
+
+问：前端和后端怎么连接起来的？ 接口 / 请求
+
+答：前端发送请求调用后端接口
+
+1）安装请求工具类 Axios
+
+官方文档：https://axios-http.com/docs/intro
+
+代码：
+
+```shell
+shell
+
+复制代码npm install axios
+```
+
+2）编写调用后端的代码
+
+传统情况下，每个请求都要单独编写代码。至少得写一个请求路径
+
+完全不用！！！
+
+直接自动生成即可：https://github.com/ferdikoomen/openapi-typescript-codegen
+
+首先安装：
+
+```shell
+npm install openapi-typescript-codegen --save-dev
+```
+
+然后执行命令生成代码：
+
+```shell
+openapi --input http://localhost:8121/api/v2/api-docs --output ./generated --client axios
+```
+
+3）直接使用生成的 Service 代码，直接调用函数发送请求即可，比如获取登录信息
+
+```typescript
+typescript复制代码// 从远程请求获取登录信息
+const res = await UserControllerService.getLoginUserUsingGet();
+if (res.code === 0) {
+  commit("updateUser", res.data);
+} else {
+  commit("updateUser", {
+    ...state.loginUser,
+    userRole: ACCESS_ENUM.NOT_LOGIN,
+  });
+}
+```
+
+如果想要自定义请求参数，怎么办？
+
+1）使用代码生成器提供的全局参数修改对象：
+
+```javascript
+javascript复制代码export const OpenAPI: OpenAPIConfig = {
+    BASE: 'http://localhost:3000/api',
+    VERSION: '2.0',
+    WITH_CREDENTIALS: false,
+    CREDENTIALS: 'include',
+    TOKEN: undefined,
+    USERNAME: undefined,
+    PASSWORD: undefined,
+    HEADERS: undefined,
+    ENCODE_PATH: undefined,
+};
+```
+
+文档：https://github.com/ferdikoomen/openapi-typescript-codegen/blob/master/docs/openapi-object.md
+
+2）直接定义 axios 请求库的全局参数，比如全局请求响应拦截器
+
+文档：https://axios-http.com/docs/interceptors
+
+示例代码：
+
+```typescript
+// Add a request interceptor
+import axios from "axios";
+
+axios.interceptors.request.use(
+  function (config) {
+    // Do something before request is sent
+    return config;
+  },
+  function (error) {
+    // Do something with request error
+    return Promise.reject(error);
+  }
+);
+
+// Add a response interceptor
+axios.interceptors.response.use(
+  function (response) {
+    console.log("响应", response);
+    // Any status code that lie within the range of 2xx cause this function to trigger
+    // Do something with response data
+    return response;
+  },
+  function (error) {
+    // Any status codes that falls outside the range of 2xx cause this function to trigger
+    // Do something with response error
+    return Promise.reject(error);
+  }
+);
+```
+
+###  用户自动登录
+
+#### 自动登录
+
+1）在 store\user.ts 编写获取远程登陆用户信息的代码：
+
+```typescript
+actions: {
+    async getLoginUser({ commit, state }, payload) {
+      // 从远程请求获取登录信息
+      const res = await UserControllerService.getLoginUserUsingGet();
+      if (res.code === 0) {
+        commit("updateUser", res.data);
+      } else {
+        commit("updateUser", {
+          ...state.loginUser,
+          userRole: ACCESS_ENUM.NOT_LOGIN,
+        });
+      }
+    },
+  },
+```
+
+2）在哪里去触发 getLoginUser 函数的执行？应当在一个全局的位置
+
+有很多选择：
+
+1. 路由拦截 ✔
+2. 全局页面入口 app.vue
+3. 全局通用布局（所有页面都共享的组件）
+
+此处选择第一种方案，可以直接在全局权限管理的路由拦截中判断用户是否已经登录了。
+
+#### 全局权限管理优化
+
+1）新建 access\index.ts 文件，把原有的路由拦截、权限校验逻辑放在独立的文件中
+
+优势：只要不引入、就不会开启、不会对项目有影响
+
+2）编写权限管理和自动登录逻辑
+
+如果没登陆过，自动登录：
+
+```typescript
+typescript复制代码
+  const loginUser = store.state.user.loginUser;
+  // 如果之前没登陆过，自动登录
+  if (!loginUser || !loginUser.userRole) {
+    // 加 await 是为了等用户登录成功之后，再执行后续的代码
+    await store.dispatch("user/getLoginUser");
+  }
+```
+
+如果用户访问的页面不需要登录，是否需要强制跳转到登录页？
+
+答：不需要
+
+access\index.ts 示例代码：
+
+```typescript
+typescript复制代码import router from "@/router";
+import store from "@/store";
+import ACCESS_ENUM from "@/access/accessEnum";
+import checkAccess from "@/access/checkAccess";
+
+router.beforeEach(async (to, from, next) => {
+  console.log("登陆用户信息", store.state.user.loginUser);
+  const loginUser = store.state.user.loginUser;
+  // // 如果之前没登陆过，自动登录
+  if (!loginUser || !loginUser.userRole) {
+    // 加 await 是为了等用户登录成功之后，再执行后续的代码
+    await store.dispatch("user/getLoginUser");
+  }
+  const needAccess = (to.meta?.access as string) ?? ACCESS_ENUM.NOT_LOGIN;
+  // 要跳转的页面必须要登陆
+  if (needAccess !== ACCESS_ENUM.NOT_LOGIN) {
+    // 如果没登陆，跳转到登录页面
+    if (!loginUser || !loginUser.userRole) {
+      next(`/user/login?redirect=${to.fullPath}`);
+      return;
+    }
+    // 如果已经登陆了，但是权限不足，那么跳转到无权限页面
+    if (!checkAccess(loginUser, needAccess)) {
+      next("/noAuth");
+      return;
+    }
+  }
+  next();
+});
+```
 
 ## 第二章：单体项目开发
 
