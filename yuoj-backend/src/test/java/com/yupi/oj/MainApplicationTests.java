@@ -14,6 +14,10 @@ class MainApplicationTests {
 
     @Test
     void contextLoads() {
+
+        if (true) {
+            System.out.println("true = " + true);
+        }
     }
 
 }
