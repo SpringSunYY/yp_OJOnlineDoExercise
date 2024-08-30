@@ -1278,6 +1278,966 @@ create table if not exists question_submit
 
 原则上：能不用索引就不用索引；能用单个索引就别用联合 / 多个索引；不要给没区分度的字段加索引（比如性别，就男 / 女）。因为索引也是要占用空间的。
 
+## 后端接口开发
+
+### 后端开发流程
+
+1）根据功能设计库表
+
+2）自动生成对数据库基本的增删改查（mapper 和 service 层的基本功能）
+
+3）编写 Controller 层，实现基本的增删改查和权限校验（复制粘贴）
+
+4）去根据业务定制开发新的功能 / 编写新的代码
+
+### 代码生成方法
+
+1）安装 MyBatisX 插件
+
+2）根据项目去调整生成配置，建议生成代码到独立的包，不要影响老的项目
+
+![image.png](./assets/6be58849-e809-4bc3-9a72-11fe63298bd2.png)
+
+3）把代码从生成包中移到实际项目对应目录中
+
+4）找相似的代码去复制 Controller
+
+- 单表去复制单表 Controller（比如 question => post）
+- 关联表去复制关联表（比如 question_submit => post_thumb ）
+
+5）复制实体类相关的 DTO、VO、枚举值字段（用于接受前端请求、或者业务间传递信息）
+
+复制之后，调整需要的字段
+
+updateRequest 和 editRequest 的区别：前者是给管理员更新用的，可以指定更多字段；后者是给普通用户试用的，只能指定部分字段。
+
+6）为了更方便地处理 json 字段中的某个字段，需要给对应的 json 字段编写独立的类，比如 judgeConfig、judgeInfo、judgeCase。
+
+示例代码：
+
+```java
+/**
+ * 题目用例
+ */
+@Data
+public class JudgeCase {
+
+    /**
+     * 输入用例
+     */
+    private String input;
+
+    /**
+     * 输出用例
+     */
+    private String output;
+}
+```
+
+小知识：什么情况下要加业务前缀？什么情况下不加？
+
+加业务前缀的好处，防止多个表都有类似的类，产生冲突；不加的前提，因为可能这个类是多个业务之间共享的，能够复用的。
+
+定义 VO 类：作用是专门给前端返回对象，可以节约网络传输大小、或者过滤字段（脱敏）、保证安全性。
+
+比如 judgeCase、answer 字段，一定要删，不能直接给用户答案。
+
+7）校验 Controller 层的代码，看看除了要调用的方法缺失外，还有无报错
+
+```java
+package com.yupi.oj.controller;
+
+import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yupi.oj.annotation.AuthCheck;
+import com.yupi.oj.common.BaseResponse;
+import com.yupi.oj.common.DeleteRequest;
+import com.yupi.oj.common.ErrorCode;
+import com.yupi.oj.common.ResultUtils;
+import com.yupi.oj.constant.UserConstant;
+import com.yupi.oj.exception.BusinessException;
+import com.yupi.oj.exception.ThrowUtils;
+import com.yupi.oj.model.dto.question.QuestionAddRequest;
+import com.yupi.oj.model.dto.question.QuestionEditRequest;
+import com.yupi.oj.model.dto.question.QuestionQueryRequest;
+import com.yupi.oj.model.dto.question.QuestionUpdateRequest;
+import com.yupi.oj.model.entity.Question;
+import com.yupi.oj.model.entity.User;
+import com.yupi.oj.model.vo.QuestionVO;
+import com.yupi.oj.service.QuestionService;
+import com.yupi.oj.service.UserService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
+import org.springframework.web.bind.annotation.*;
+
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+import java.util.List;
+
+/**
+ * 题目接口
+ *
+ * @author YY
+ */
+@RestController
+@RequestMapping("/question")
+@Slf4j
+public class QuestionController {
+
+    @Resource
+    private QuestionService questionService;
+
+    @Resource
+    private UserService userService;
+
+    // region 增删改查
+
+    /**
+     * 创建
+     *
+     * @param questionAddRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/add")
+    public BaseResponse<Long> addQuestion(@RequestBody QuestionAddRequest questionAddRequest, HttpServletRequest request) {
+        if (questionAddRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Question question = new Question();
+        BeanUtils.copyProperties(questionAddRequest, question);
+        List<String> tags = questionAddRequest.getTags();
+        if (tags != null) {
+            question.setTags(JSONUtil.toJsonStr(tags));
+        }
+//        questionService.validQuestion(question, true);
+        User loginUser = userService.getLoginUser(request);
+        question.setUserId(loginUser.getId());
+        question.setFavourNum(0);
+        question.setThumbNum(0);
+        boolean result = questionService.save(question);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        long newQuestionId = question.getId();
+        return ResultUtils.success(newQuestionId);
+    }
+
+    /**
+     * 删除
+     *
+     * @param deleteRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/delete")
+    public BaseResponse<Boolean> deleteQuestion(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
+        if (deleteRequest == null || deleteRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User user = userService.getLoginUser(request);
+        long id = deleteRequest.getId();
+        // 判断是否存在
+        Question oldQuestion = questionService.getById(id);
+        ThrowUtils.throwIf(oldQuestion == null, ErrorCode.NOT_FOUND_ERROR);
+        // 仅本人或管理员可删除
+        if (!oldQuestion.getUserId().equals(user.getId()) && !userService.isAdmin(request)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+        boolean b = questionService.removeById(id);
+        return ResultUtils.success(b);
+    }
+
+    /**
+     * 更新（仅管理员）
+     *
+     * @param questionUpdateRequest
+     * @return
+     */
+    @PostMapping("/update")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> updateQuestion(@RequestBody QuestionUpdateRequest questionUpdateRequest) {
+        if (questionUpdateRequest == null || questionUpdateRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Question question = new Question();
+        BeanUtils.copyProperties(questionUpdateRequest, question);
+        List<String> tags = questionUpdateRequest.getTags();
+        if (tags != null) {
+            question.setTags(JSONUtil.toJsonStr(tags));
+        }
+        // 参数校验
+        questionService.validQuestion(question, false);
+        long id = questionUpdateRequest.getId();
+        // 判断是否存在
+        Question oldQuestion = questionService.getById(id);
+        ThrowUtils.throwIf(oldQuestion == null, ErrorCode.NOT_FOUND_ERROR);
+        boolean result = questionService.updateById(question);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 根据 id 获取
+     *
+     * @param id
+     * @return
+     */
+    @GetMapping("/get/vo")
+    public BaseResponse<QuestionVO> getQuestionVOById(long id, HttpServletRequest request) {
+        if (id <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Question question = questionService.getById(id);
+        if (question == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+        return ResultUtils.success(questionService.getQuestionVO(question, request));
+    }
+
+    /**
+     * 分页获取列表（仅管理员）
+     *
+     * @param questionQueryRequest
+     * @return
+     */
+    @PostMapping("/list/page")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Page<Question>> listQuestionByPage(@RequestBody QuestionQueryRequest questionQueryRequest) {
+        long current = questionQueryRequest.getCurrent();
+        long size = questionQueryRequest.getPageSize();
+        Page<Question> questionPage = questionService.page(new Page<>(current, size),
+                questionService.getQueryWrapper(questionQueryRequest));
+        return ResultUtils.success(questionPage);
+    }
+
+    /**
+     * 分页获取列表（封装类）
+     *
+     * @param questionQueryRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/list/page/vo")
+    public BaseResponse<Page<QuestionVO>> listQuestionVOByPage(@RequestBody QuestionQueryRequest questionQueryRequest,
+                                                       HttpServletRequest request) {
+        long current = questionQueryRequest.getCurrent();
+        long size = questionQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
+        Page<Question> questionPage = questionService.page(new Page<>(current, size),
+                questionService.getQueryWrapper(questionQueryRequest));
+        return ResultUtils.success(questionService.getQuestionVOPage(questionPage, request));
+    }
+
+    /**
+     * 分页获取当前用户创建的资源列表
+     *
+     * @param questionQueryRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/my/list/page/vo")
+    public BaseResponse<Page<QuestionVO>> listMyQuestionVOByPage(@RequestBody QuestionQueryRequest questionQueryRequest,
+                                                         HttpServletRequest request) {
+        if (questionQueryRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        questionQueryRequest.setUserId(loginUser.getId());
+        long current = questionQueryRequest.getCurrent();
+        long size = questionQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
+        Page<Question> questionPage = questionService.page(new Page<>(current, size),
+                questionService.getQueryWrapper(questionQueryRequest));
+        return ResultUtils.success(questionService.getQuestionVOPage(questionPage, request));
+    }
+
+    // endregion
+
+    /**
+     * 分页搜索（从 ES 查询，封装类）
+     *
+     * @param questionQueryRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/search/page/vo")
+    public BaseResponse<Page<QuestionVO>> searchQuestionVOByPage(@RequestBody QuestionQueryRequest questionQueryRequest,
+                                                         HttpServletRequest request) {
+        long size = questionQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
+        Page<Question> questionPage = new Page<>();
+        return ResultUtils.success(questionService.getQuestionVOPage(questionPage, request));
+    }
+
+    /**
+     * 编辑（用户）
+     *
+     * @param questionEditRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/edit")
+    public BaseResponse<Boolean> editQuestion(@RequestBody QuestionEditRequest questionEditRequest, HttpServletRequest request) {
+        if (questionEditRequest == null || questionEditRequest.getId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Question question = new Question();
+        BeanUtils.copyProperties(questionEditRequest, question);
+        List<String> tags = questionEditRequest.getTags();
+        if (tags != null) {
+            question.setTags(JSONUtil.toJsonStr(tags));
+        }
+        // 参数校验
+        questionService.validQuestion(question, false);
+        User loginUser = userService.getLoginUser(request);
+        long id = questionEditRequest.getId();
+        // 判断是否存在
+        Question oldQuestion = questionService.getById(id);
+        ThrowUtils.throwIf(oldQuestion == null, ErrorCode.NOT_FOUND_ERROR);
+        // 仅本人或管理员可编辑
+        if (!oldQuestion.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+        boolean result = questionService.updateById(question);
+        return ResultUtils.success(result);
+    }
+
+}
+
+```
+
+```
+package com.yupi.oj.controller;
+
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yupi.oj.annotation.AuthCheck;
+import com.yupi.oj.common.BaseResponse;
+import com.yupi.oj.common.ErrorCode;
+import com.yupi.oj.common.ResultUtils;
+import com.yupi.oj.constant.UserConstant;
+import com.yupi.oj.exception.BusinessException;
+import com.yupi.oj.model.dto.question.QuestionQueryRequest;
+import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
+import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
+import com.yupi.oj.model.entity.Question;
+import com.yupi.oj.model.entity.QuestionSubmit;
+import com.yupi.oj.model.entity.User;
+import com.yupi.oj.model.vo.QuestionSubmitVO;
+import com.yupi.oj.service.QuestionSubmitService;
+import com.yupi.oj.service.UserService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+
+/**
+ * 题目提交接口
+ *
+ * @author YY
+ */
+@RestController
+@RequestMapping("/question_submit")
+@Slf4j
+public class QuestionSubmitController {
+
+    @Resource
+    private QuestionSubmitService questionSubmitService;
+
+    @Resource
+    private UserService userService;
+
+    /**
+     * 提交题目
+     *
+     * @param questionSubmitAddRequest
+     * @param request
+     * @return 提交记录的 id
+     */
+    @PostMapping("/")
+    public BaseResponse<Long> doQuestionSubmit(@RequestBody QuestionSubmitAddRequest questionSubmitAddRequest,
+            HttpServletRequest request) {
+        if (questionSubmitAddRequest == null || questionSubmitAddRequest.getQuestionId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        // 登录才能点赞
+        final User loginUser = userService.getLoginUser(request);
+        long questionSubmitId = questionSubmitService.doQuestionSubmit(questionSubmitAddRequest, loginUser);
+        return ResultUtils.success(questionSubmitId);
+    }
+
+    /**
+     * 分页获取题目提交列表（除了管理员外，普通用户只能看到非答案、提交代码等公开信息）
+     *
+     * @param questionSubmitQueryRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/list/page")
+    public BaseResponse<Page<QuestionSubmitVO>> listQuestionSubmitByPage(@RequestBody QuestionSubmitQueryRequest questionSubmitQueryRequest,
+                                                                         HttpServletRequest request) {
+        long current = questionSubmitQueryRequest.getCurrent();
+        long size = questionSubmitQueryRequest.getPageSize();
+        // 从数据库中查询原始的题目提交分页信息
+        Page<QuestionSubmit> questionSubmitPage = questionSubmitService.page(new Page<>(current, size),
+                questionSubmitService.getQueryWrapper(questionSubmitQueryRequest));
+        final User loginUser = userService.getLoginUser(request);
+        // 返回脱敏信息
+        return ResultUtils.success(questionSubmitService.getQuestionSubmitVOPage(questionSubmitPage, loginUser));
+    }
+
+
+}
+
+```
+
+8）实现 Service 层的代码，从对应的已经编写好的实现类复制粘贴，全局替换（比如 question => post）
+
+```java
+package com.yupi.oj.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yupi.oj.model.dto.question.QuestionQueryRequest;
+import com.yupi.oj.model.entity.Question;
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.yupi.oj.model.vo.QuestionVO;
+
+import javax.servlet.http.HttpServletRequest;
+
+/**
+* @author YY
+* @description 针对表【question(题目)】的数据库操作Service
+* @createDate 2024-08-30 20:18:54
+*/
+public interface QuestionService extends IService<Question> {
+    /**
+     * 校验
+     *
+     * @param question
+     * @param add
+     */
+    void validQuestion(Question question, boolean add);
+
+    /**
+     * 获取查询条件
+     *
+     * @param questionQueryRequest
+     * @return
+     */
+    QueryWrapper<Question> getQueryWrapper(QuestionQueryRequest questionQueryRequest);
+
+    /**
+     * 获取题目封装
+     *
+     * @param question
+     * @param request
+     * @return
+     */
+    QuestionVO getQuestionVO(Question question, HttpServletRequest request);
+
+    /**
+     * 分页获取题目封装
+     *
+     * @param questionPage
+     * @param request
+     * @return
+     */
+    Page<QuestionVO> getQuestionVOPage(Page<Question> questionPage, HttpServletRequest request);
+}
+
+```
+
+```java
+package com.yupi.oj.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.yupi.oj.common.ErrorCode;
+import com.yupi.oj.constant.CommonConstant;
+import com.yupi.oj.exception.BusinessException;
+import com.yupi.oj.exception.ThrowUtils;
+import com.yupi.oj.model.dto.question.QuestionQueryRequest;
+import com.yupi.oj.model.entity.Question;
+import com.yupi.oj.model.entity.User;
+import com.yupi.oj.model.vo.QuestionVO;
+import com.yupi.oj.model.vo.UserVO;
+import com.yupi.oj.service.QuestionService;
+import com.yupi.oj.mapper.QuestionMapper;
+import com.yupi.oj.service.UserService;
+import com.yupi.oj.utils.SqlUtils;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+* @author YY
+* @description 针对表【question(题目)】的数据库操作Service实现
+* @createDate 2024-08-30 20:18:54
+*/
+@Service
+public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question>
+    implements QuestionService{
+
+    @Resource
+    private UserService userService;
+
+    /**
+     * 校验题目是否合法
+     * @param question
+     * @param add
+     */
+    @Override
+    public void validQuestion(Question question, boolean add) {
+        if (question == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        String title = question.getTitle();
+        String content = question.getContent();
+        String tags = question.getTags();
+        String answer = question.getAnswer();
+        String judgeCase = question.getJudgeCase();
+        String judgeConfig = question.getJudgeConfig();
+        // 创建时，参数不能为空
+        if (add) {
+            ThrowUtils.throwIf(StringUtils.isAnyBlank(title, content, tags), ErrorCode.PARAMS_ERROR);
+        }
+        // 有参数则校验
+        if (StringUtils.isNotBlank(title) && title.length() > 80) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "标题过长");
+        }
+        if (StringUtils.isNotBlank(content) && content.length() > 8192) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "内容过长");
+        }
+        if (StringUtils.isNotBlank(answer) && answer.length() > 8192) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "答案过长");
+        }
+        if (StringUtils.isNotBlank(judgeCase) && judgeCase.length() > 8192) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "判题用例过长");
+        }
+        if (StringUtils.isNotBlank(judgeConfig) && judgeConfig.length() > 8192) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "判题配置过长");
+        }
+    }
+
+    /**
+     * 获取查询包装类（用户根据哪些字段查询，根据前端传来的请求对象，得到 mybatis 框架支持的查询 QueryWrapper 类）
+     *
+     * @param questionQueryRequest
+     * @return
+     */
+    @Override
+    public QueryWrapper<Question> getQueryWrapper(QuestionQueryRequest questionQueryRequest) {
+        QueryWrapper<Question> queryWrapper = new QueryWrapper<>();
+        if (questionQueryRequest == null) {
+            return queryWrapper;
+        }
+        Long id = questionQueryRequest.getId();
+        String title = questionQueryRequest.getTitle();
+        String content = questionQueryRequest.getContent();
+        List<String> tags = questionQueryRequest.getTags();
+        String answer = questionQueryRequest.getAnswer();
+        Long userId = questionQueryRequest.getUserId();
+        String sortField = questionQueryRequest.getSortField();
+        String sortOrder = questionQueryRequest.getSortOrder();
+
+        // 拼接查询条件
+        queryWrapper.like(StringUtils.isNotBlank(title), "title", title);
+        queryWrapper.like(StringUtils.isNotBlank(content), "content", content);
+        queryWrapper.like(StringUtils.isNotBlank(answer), "answer", answer);
+        if (CollectionUtils.isNotEmpty(tags)) {
+            for (String tag : tags) {
+                queryWrapper.like("tags", "\"" + tag + "\"");
+            }
+        }
+        queryWrapper.eq(ObjectUtils.isNotEmpty(id), "id", id);
+        queryWrapper.eq(ObjectUtils.isNotEmpty(userId), "userId", userId);
+        queryWrapper.eq("isDelete", false);
+        queryWrapper.orderBy(SqlUtils.validSortField(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC),
+                sortField);
+        return queryWrapper;
+    }
+
+    @Override
+    public QuestionVO getQuestionVO(Question question, HttpServletRequest request) {
+        QuestionVO questionVO = QuestionVO.objToVo(question);
+        // 1. 关联查询用户信息
+        Long userId = question.getUserId();
+        User user = null;
+        if (userId != null && userId > 0) {
+            user = userService.getById(userId);
+        }
+        UserVO userVO = userService.getUserVO(user);
+        questionVO.setUserVO(userVO);
+        return questionVO;
+    }
+
+    @Override
+    public Page<QuestionVO> getQuestionVOPage(Page<Question> questionPage, HttpServletRequest request) {
+        List<Question> questionList = questionPage.getRecords();
+        Page<QuestionVO> questionVOPage = new Page<>(questionPage.getCurrent(), questionPage.getSize(), questionPage.getTotal());
+        if (CollectionUtils.isEmpty(questionList)) {
+            return questionVOPage;
+        }
+        // 1. 关联查询用户信息
+        Set<Long> userIdSet = questionList.stream().map(Question::getUserId).collect(Collectors.toSet());
+        Map<Long, List<User>> userIdUserListMap = userService.listByIds(userIdSet).stream()
+                .collect(Collectors.groupingBy(User::getId));
+        // 填充信息
+        List<QuestionVO> questionVOList = questionList.stream().map(question -> {
+            QuestionVO questionVO = QuestionVO.objToVo(question);
+            Long userId = question.getUserId();
+            User user = null;
+            if (userIdUserListMap.containsKey(userId)) {
+                user = userIdUserListMap.get(userId).get(0);
+            }
+            questionVO.setUserVO(userService.getUserVO(user));
+            return questionVO;
+        }).collect(Collectors.toList());
+        questionVOPage.setRecords(questionVOList);
+        return questionVOPage;
+    }
+}
+
+
+
+
+
+```
+
+```java
+package com.yupi.oj.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
+import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
+import com.yupi.oj.model.entity.QuestionSubmit;
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.yupi.oj.model.entity.User;
+import com.yupi.oj.model.vo.QuestionSubmitVO;
+
+/**
+* @author YY
+* @description 针对表【question_submit(题目提交)】的数据库操作Service
+* @createDate 2024-08-30 20:19:43
+*/
+public interface QuestionSubmitService extends IService<QuestionSubmit> {
+    /**
+     * 题目提交
+     *
+     * @param questionSubmitAddRequest 题目提交信息
+     * @param loginUser
+     * @return
+     */
+    long doQuestionSubmit(QuestionSubmitAddRequest questionSubmitAddRequest, User loginUser);
+
+    /**
+     * 获取查询条件
+     *
+     * @param questionSubmitQueryRequest
+     * @return
+     */
+    QueryWrapper<QuestionSubmit> getQueryWrapper(QuestionSubmitQueryRequest questionSubmitQueryRequest);
+
+    /**
+     * 获取题目封装
+     *
+     * @param questionSubmit
+     * @param loginUser
+     * @return
+     */
+    QuestionSubmitVO getQuestionSubmitVO(QuestionSubmit questionSubmit, User loginUser);
+
+    /**
+     * 分页获取题目封装
+     *
+     * @param questionSubmitPage
+     * @param loginUser
+     * @return
+     */
+    Page<QuestionSubmitVO> getQuestionSubmitVOPage(Page<QuestionSubmit> questionSubmitPage, User loginUser);
+}
+
+```
+
+```java
+package com.yupi.oj.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.yupi.oj.common.ErrorCode;
+import com.yupi.oj.constant.CommonConstant;
+import com.yupi.oj.exception.BusinessException;
+import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
+import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
+import com.yupi.oj.model.entity.Question;
+import com.yupi.oj.model.entity.QuestionSubmit;
+import com.yupi.oj.model.entity.User;
+import com.yupi.oj.model.enums.QuestionSubmitLanguageEnum;
+import com.yupi.oj.model.enums.QuestionSubmitStatusEnum;
+import com.yupi.oj.model.vo.QuestionSubmitVO;
+import com.yupi.oj.service.QuestionService;
+import com.yupi.oj.service.QuestionSubmitService;
+import com.yupi.oj.mapper.QuestionSubmitMapper;
+import com.yupi.oj.service.UserService;
+import com.yupi.oj.utils.SqlUtils;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+* @author YY
+* @description 针对表【question_submit(题目提交)】的数据库操作Service实现
+* @createDate 2024-08-30 20:19:43
+*/
+@Service
+public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper, QuestionSubmit>
+    implements QuestionSubmitService{
+    @Resource
+    private QuestionService questionService;
+
+    @Resource
+    private UserService userService;
+
+    /**
+     * 提交题目
+     *
+     * @param questionSubmitAddRequest
+     * @param loginUser
+     * @return
+     */
+    @Override
+    public long doQuestionSubmit(QuestionSubmitAddRequest questionSubmitAddRequest, User loginUser) {
+        // 校验编程语言是否合法
+        String language = questionSubmitAddRequest.getLanguage();
+        QuestionSubmitLanguageEnum languageEnum = QuestionSubmitLanguageEnum.getEnumByValue(language);
+        if (languageEnum == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "编程语言错误");
+        }
+        long questionId = questionSubmitAddRequest.getQuestionId();
+        // 判断实体是否存在，根据类别获取实体
+        Question question = questionService.getById(questionId);
+        if (question == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
+        }
+        // 是否已提交题目
+        long userId = loginUser.getId();
+        // 每个用户串行提交题目
+        QuestionSubmit questionSubmit = new QuestionSubmit();
+        questionSubmit.setUserId(userId);
+        questionSubmit.setQuestionId(questionId);
+        questionSubmit.setCode(questionSubmitAddRequest.getCode());
+        questionSubmit.setLanguage(language);
+        // 设置初始状态
+        questionSubmit.setStatus(QuestionSubmitStatusEnum.WAITING.getValue());
+        questionSubmit.setJudgeInfo("{}");
+        boolean save = this.save(questionSubmit);
+        if (!save){
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "数据插入失败");
+        }
+        return questionSubmit.getId();
+    }
+
+
+    /**
+     * 获取查询包装类（用户根据哪些字段查询，根据前端传来的请求对象，得到 mybatis 框架支持的查询 QueryWrapper 类）
+     *
+     * @param questionSubmitQueryRequest
+     * @return
+     */
+    @Override
+    public QueryWrapper<QuestionSubmit> getQueryWrapper(QuestionSubmitQueryRequest questionSubmitQueryRequest) {
+        QueryWrapper<QuestionSubmit> queryWrapper = new QueryWrapper<>();
+        if (questionSubmitQueryRequest == null) {
+            return queryWrapper;
+        }
+        String language = questionSubmitQueryRequest.getLanguage();
+        Integer status = questionSubmitQueryRequest.getStatus();
+        Long questionId = questionSubmitQueryRequest.getQuestionId();
+        Long userId = questionSubmitQueryRequest.getUserId();
+        String sortField = questionSubmitQueryRequest.getSortField();
+        String sortOrder = questionSubmitQueryRequest.getSortOrder();
+
+        // 拼接查询条件
+        queryWrapper.eq(StringUtils.isNotBlank(language), "language", language);
+        queryWrapper.eq(ObjectUtils.isNotEmpty(userId), "userId", userId);
+        queryWrapper.eq(ObjectUtils.isNotEmpty(questionId), "questionId", questionId);
+        queryWrapper.eq(QuestionSubmitStatusEnum.getEnumByValue(status) != null, "status", status);
+        queryWrapper.eq("isDelete", false);
+        queryWrapper.orderBy(SqlUtils.validSortField(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC),
+                sortField);
+        return queryWrapper;
+    }
+
+    @Override
+    public QuestionSubmitVO getQuestionSubmitVO(QuestionSubmit questionSubmit, User loginUser) {
+        QuestionSubmitVO questionSubmitVO = QuestionSubmitVO.objToVo(questionSubmit);
+        // 脱敏：仅本人和管理员能看见自己（提交 userId 和登录用户 id 不同）提交的代码
+        long userId = loginUser.getId();
+        // 处理脱敏
+        if (userId != questionSubmit.getUserId() && !userService.isAdmin(loginUser)) {
+            questionSubmitVO.setCode(null);
+        }
+        return questionSubmitVO;
+    }
+
+    @Override
+    public Page<QuestionSubmitVO> getQuestionSubmitVOPage(Page<QuestionSubmit> questionSubmitPage, User loginUser) {
+        List<QuestionSubmit> questionSubmitList = questionSubmitPage.getRecords();
+        Page<QuestionSubmitVO> questionSubmitVOPage = new Page<>(questionSubmitPage.getCurrent(), questionSubmitPage.getSize(), questionSubmitPage.getTotal());
+        if (CollectionUtils.isEmpty(questionSubmitList)) {
+            return questionSubmitVOPage;
+        }
+        List<QuestionSubmitVO> questionSubmitVOList = questionSubmitList.stream()
+                .map(questionSubmit -> getQuestionSubmitVO(questionSubmit, loginUser))
+                .collect(Collectors.toList());
+        questionSubmitVOPage.setRecords(questionSubmitVOList);
+        return questionSubmitVOPage;
+    }
+}
+```
+
+9）编写 QuestionVO 的 json / 对象转换工具类
+
+10）用同样的方法，编写 questionSubmit 提交类，这次参考 postThumb 相关文件
+
+10）编写枚举类
+
+参考代码：
+
+```java
+package com.yupi.yuoj.model.enums;
+
+import org.apache.commons.lang3.ObjectUtils;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 题目提交编程语言枚举
+ *
+ * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
+ * @from <a href="https://yupi.icu">编程导航知识星球</a>
+ */
+public enum QuestionSubmitLanguageEnum {
+
+    JAVA("java", "java"),
+    CPLUSPLUS("c++", "c++"),
+    GOLANG("golang", "golang");
+
+    private final String text;
+
+    private final String value;
+
+    QuestionSubmitLanguageEnum(String text, String value) {
+        this.text = text;
+        this.value = value;
+    }
+
+    /**
+     * 获取值列表
+     *
+     * @return
+     */
+    public static List<String> getValues() {
+        return Arrays.stream(values()).map(item -> item.value).collect(Collectors.toList());
+    }
+
+    /**
+     * 根据 value 获取枚举
+     *
+     * @param value
+     * @return
+     */
+    public static QuestionSubmitLanguageEnum getEnumByValue(String value) {
+        if (ObjectUtils.isEmpty(value)) {
+            return null;
+        }
+        for (QuestionSubmitLanguageEnum anEnum : QuestionSubmitLanguageEnum.values()) {
+            if (anEnum.value.equals(value)) {
+                return anEnum;
+            }
+        }
+        return null;
+    }
+
+    public String getValue() {
+        return value;
+    }
+
+    public String getText() {
+        return text;
+    }
+}
+```
+
+
+
+编写好基本代码后，记得通过 Swagger 或者编写单元测试去验证。
+
+#### 小知识
+
+为了防止用户按照 id 顺序爬取题目，建议把 id 的生成规则改为 ASSIGN_ID 而不是从 1 开始自增，示例代码如下：
+
+```java
+/**
+* id
+*/
+@TableId(type = IdType.ASSIGN_ID)
+private Long id;
+```
+
+### 查询提交信息接口
+
+功能：能够根据用户 id、或者题目 id、编程语言、题目状态，去查询提交记录
+
+注意事项：
+
+仅本人和管理员能看见自己（提交 userId 和登录用户 id 不同）提交的代码
+
+实现方案：先查询，再根据权限去脱敏
+
+核心代码：
+
+```java
+@Override
+public QuestionSubmitVO getQuestionSubmitVO(QuestionSubmit questionSubmit, User loginUser) {
+    QuestionSubmitVO questionSubmitVO = QuestionSubmitVO.objToVo(questionSubmit);
+    // 脱敏：仅本人和管理员能看见自己（提交 userId 和登录用户 id 不同）提交的代码
+    long userId = loginUser.getId();
+    // 处理脱敏
+    if (userId != questionSubmit.getUserId() && !userService.isAdmin(loginUser)) {
+        questionSubmitVO.setCode(null);
+    }
+    return questionSubmitVO;
+}
+```
+
+![image.png](./assets/a463a4f9-6a8a-4b0e-8490-f9144cb872b7.png)
+
+
+
 ## 第三章：代码沙箱实现
 
 1. 代码沙箱 Java 原生实现 | 执行原理
