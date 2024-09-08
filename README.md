@@ -2534,6 +2534,290 @@ const props = withDefaults(defineProps<Props>(), {
 
 > 项目扩展：用 diff editor 对比用户代码和标准答案的区别
 
+### 页面开发
+
+#### 创建题目页面
+
+重新根据后端生成前端请求代码：
+
+```shell
+openapi --input http://localhost:8121/api/v2/api-docs --output ./generated --client axios
+```
+
+注意 - 用户登录后仍显示未登录：
+
+是因为代码生成后，OpenAPI 文件的 CREDENTIALS 参数重置了，应该改为 true。
+
+示例代码：
+
+```typescript
+export const OpenAPI: OpenAPIConfig = {
+  BASE: 'http://localhost:8121',
+  VERSION: '1.0',
+  WITH_CREDENTIALS: true,
+  CREDENTIALS: 'include',
+  TOKEN: undefined,
+  USERNAME: undefined,
+  PASSWORD: undefined,
+  HEADERS: undefined,
+  ENCODE_PATH: undefined,
+};
+```
+
+需要用户输入的值：
+
+```json
+{
+  "answer": "暴力破解",
+  "content": "题目内容",
+  "judgeCase": [
+    {
+      "input": "1 2",
+      "output": "3 4"
+    }
+  ],
+  "judgeConfig": {
+    "memoryLimit": 1000,
+    "stackLimit": 1000,
+    "timeLimit": 1000
+  },
+  "tags": [
+      "栈", "简单"
+],
+  "title": "A + B"
+}
+```
+
+#### 小知识 - 自定义代码模板
+
+在 JetBrains 系列编辑器中打开设置，搜索 live Templates，先创建一个自定义模板组，在组下创建代码模板。
+
+效果：输入缩写，即可生成模板代码。
+
+示例模板：
+
+```vue
+<template>
+  <div id="$ID$"></div>
+</template>
+
+<script setup lang="ts">
+$END$
+</script>
+
+<style scoped>
+#$ID$ {
+}
+</style>
+```
+
+注意，其中的 ID 是根据表达式自动生成的：camelCase(fileNameWithoutExtension())
+
+![image.png](./assets/e04f7672-93a8-4360-82bb-4ba5fc104e0c.png)
+
+使用表单组件，先复制示例代码，再修改：https://arco.design/vue/component/form
+
+此处我们用到了
+
+- 嵌套表单：https://arco.design/vue/component/form#nest
+- 动态增减表单：https://arco.design/vue/component/form#dynamic
+
+注意，我们自定义的代码编辑器组件不会被组件库识别，需要手动指定 value 和 handleChange 函数。
+
+#### 题目管理页面开发
+
+1）使用表格组件：https://arco.design/vue/component/table#custom（需要找到自定义操作的示例）
+
+2）查询数据
+
+3）定义表格列
+
+4）加载数据
+
+5）调整格式
+
+比如 json 格式不好看，有 2 种方法调整：
+
+1. 使用组件库自带的语法，自动格式化（更方便）
+2. 完全自定义渲染，想展示什么就展示什么（更灵活）
+
+6）添加删除、更新操作
+
+删除后要执行 loadData 刷新数据
+
+```js
+<template>
+  <div id="manageQuestionView">
+    <a-table
+      :ref="tableRef"
+      :columns="columns"
+      :data="dataList"
+      :pagination="{
+        showTotal: true,
+        pageSize: searchParams.pageSize,
+        current: searchParams.pageNum,
+        total,
+      }"
+    >
+      <template #optional="{ record }">
+        <a-space>
+          <a-button type="primary" @click="doUpdate(record)"> 修改</a-button>
+          <a-button status="danger" @click="doDelete(record)">删除</a-button>
+        </a-space>
+      </template>
+    </a-table>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import {
+  Page_Question_,
+  Question,
+  QuestionControllerService,
+} from "../../../generated";
+import message from "@arco-design/web-vue/es/message";
+import * as querystring from "querystring";
+import { useRouter } from "vue-router";
+
+const show = ref(true);
+const tableRef = ref();
+
+const dataList = ref([]);
+const total = ref(0);
+const searchParams = ref({
+  pageSize: 10,
+  pageNum: 1,
+});
+
+const loadData = async () => {
+  const res = await QuestionControllerService.listQuestionByPageUsingPost(
+    searchParams.value
+  );
+  if (res.code === 0) {
+    dataList.value = res.data.records;
+    total.value = res.data.total;
+  } else {
+    message.error("加载失败，" + res.message);
+  }
+};
+
+/**
+ * 页面加载时，请求数据
+ */
+onMounted(() => {
+  loadData();
+});
+
+// {id: "1", title: "A+ D", content: "新的题目内容", tags: "["二叉树"]", answer: "新的答案", submitNum: 0,…}
+
+const columns = [
+  {
+    title: "id",
+    dataIndex: "id",
+  },
+  {
+    title: "标题",
+    dataIndex: "title",
+  },
+  {
+    title: "内容",
+    dataIndex: "content",
+  },
+  {
+    title: "标签",
+    dataIndex: "tags",
+  },
+  {
+    title: "答案",
+    dataIndex: "answer",
+  },
+  {
+    title: "提交数",
+    dataIndex: "submitNum",
+  },
+  {
+    title: "通过数",
+    dataIndex: "acceptedNum",
+  },
+  {
+    title: "判题配置",
+    dataIndex: "judgeConfig",
+  },
+  {
+    title: "判题用例",
+    dataIndex: "judgeCase",
+  },
+  {
+    title: "用户id",
+    dataIndex: "userId",
+  },
+  {
+    title: "创建时间",
+    dataIndex: "createTime",
+  },
+  {
+    title: "操作",
+    slotName: "optional",
+  },
+];
+
+const doDelete = async (question: Question) => {
+  const res = await QuestionControllerService.deleteQuestionUsingPost({
+    id: question.id,
+  });
+  if (res.code === 0) {
+    message.success("删除成功");
+    loadData();
+  } else {
+    message.error("删除失败");
+  }
+};
+
+const router = useRouter();
+
+const doUpdate = (question: Question) => {
+  router.push({
+    path: "/update/question",
+    query: {
+      id: question.id,
+    },
+  });
+};
+</script>
+
+<style scoped>
+#manageQuestionView {
+}
+</style>
+
+```
+
+
+
+#### 更新页面开发
+
+策略：由于更新和创建都是相同的表单，所以完全没必要开发 / 复制 2 遍，可以直接复用创建页面。
+
+关键实现：如何区分两个页面？
+
+1. 路由（/add/question 和 /update/question）
+2. 请求参数（id = 1）
+
+更新页面相比于创建页面，多了 2 个改动：
+
+1）在加载页面时，更新页面需要加载出之前的数据
+
+2）在提交时，请求的地址不同
+
+### 本期成果
+
+引入了文本编辑器、代码编辑器，完成题目创建页面、题目更新页面、题目管理页面。
+
+![image.png](./assets/9e519783-891f-466e-8795-d6ef04c553ea.png)
+
+![image.png](./assets/e69acb96-895d-4c86-a3e3-ee9cad4e5941.png)
+
 ## 第三章：代码沙箱实现
 
 1. 代码沙箱 Java 原生实现 | 执行原理
