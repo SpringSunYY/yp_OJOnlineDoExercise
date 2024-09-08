@@ -1,16 +1,12 @@
 package com.yupi.oj.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yupi.oj.annotation.AuthCheck;
 import com.yupi.oj.common.BaseResponse;
 import com.yupi.oj.common.ErrorCode;
 import com.yupi.oj.common.ResultUtils;
-import com.yupi.oj.constant.UserConstant;
 import com.yupi.oj.exception.BusinessException;
-import com.yupi.oj.model.dto.question.QuestionQueryRequest;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
-import com.yupi.oj.model.entity.Question;
 import com.yupi.oj.model.entity.QuestionSubmit;
 import com.yupi.oj.model.entity.User;
 import com.yupi.oj.model.vo.QuestionSubmitVO;
@@ -79,6 +75,4 @@ public class QuestionSubmitController {
         // 返回脱敏信息
         return ResultUtils.success(questionSubmitService.getQuestionSubmitVOPage(questionSubmitPage, loginUser));
     }
-
-
 }

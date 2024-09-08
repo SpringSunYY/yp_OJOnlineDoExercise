@@ -1278,9 +1278,9 @@ create table if not exists question_submit
 
 原则上：能不用索引就不用索引；能用单个索引就别用联合 / 多个索引；不要给没区分度的字段加索引（比如性别，就男 / 女）。因为索引也是要占用空间的。
 
-## 后端接口开发
+### 后端接口开发
 
-### 后端开发流程
+#### 后端开发流程
 
 1）根据功能设计库表
 
@@ -2192,8 +2192,6 @@ public enum QuestionSubmitLanguageEnum {
 }
 ```
 
-
-
 编写好基本代码后，记得通过 Swagger 或者编写单元测试去验证。
 
 #### 小知识
@@ -2208,7 +2206,7 @@ public enum QuestionSubmitLanguageEnum {
 private Long id;
 ```
 
-### 查询提交信息接口
+#### 查询提交信息接口
 
 功能：能够根据用户 id、或者题目 id、编程语言、题目状态，去查询提交记录
 
@@ -2219,6 +2217,30 @@ private Long id;
 实现方案：先查询，再根据权限去脱敏
 
 核心代码：
+
+```java
+    /**
+     * 分页获取题目提交列表（除了管理员外，普通用户只能看到非答案、提交代码等公开信息）
+     *
+     * @param questionSubmitQueryRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/list/page")
+    public BaseResponse<Page<QuestionSubmitVO>> listQuestionSubmitByPage(@RequestBody QuestionSubmitQueryRequest questionSubmitQueryRequest,
+                                                                         HttpServletRequest request) {
+        long current = questionSubmitQueryRequest.getCurrent();
+        long size = questionSubmitQueryRequest.getPageSize();
+        // 从数据库中查询原始的题目提交分页信息
+        Page<QuestionSubmit> questionSubmitPage = questionSubmitService.page(new Page<>(current, size),
+                questionSubmitService.getQueryWrapper(questionSubmitQueryRequest));
+        final User loginUser = userService.getLoginUser(request);
+        // 返回脱敏信息
+        return ResultUtils.success(questionSubmitService.getQuestionSubmitVOPage(questionSubmitPage, loginUser));
+    }
+```
+
+
 
 ```java
 @Override
@@ -2236,7 +2258,281 @@ public QuestionSubmitVO getQuestionSubmitVO(QuestionSubmit questionSubmit, User 
 
 ![image.png](./assets/a463a4f9-6a8a-4b0e-8490-f9144cb872b7.png)
 
+## 第三章：前端页面开发
 
+### 计划
+
+以开发前端页面为主：
+
+1）用户注册页面
+
+2）创建题目页面（管理员）
+
+3）题目管理页面（管理员）
+
+- 查看（搜索）
+- 删除
+- 修改
+- 快捷创建
+
+4）题目列表页（用户）
+
+5）题目详情页（在线做题页）
+
+- 判题状态的查看
+
+6）题目提交列表页
+
+### 接入要用到的组件
+
+先接入可能用到的组件，再去写页面，避免因为后续依赖冲突、整合组件失败带来的返工。
+
+#### Markdown 编辑器
+
+为什么用 Markdown？
+
+一套通用的文本编辑语法，可以在各大网站上统一标准、渲染出统一的样式，比较简单易学。
+
+推荐的 Md 编辑器：https://github.com/bytedance/bytemd
+
+阅读官方文档，下载编辑器主体、以及 gfm（表格支持）插件、highlight 代码高亮插件
+
+```shell
+npm i @bytemd/vue-next
+npm i @bytemd/plugin-highlight @bytemd/plugin-gfm
+```
+
+引入css
+
+```js
+import 'bytemd/dist/index.css'
+```
+
+新建 MdEditor 组件，编写代码：
+
+```vue
+<template>
+  <Editor
+    :value="value"
+    :mode="mode"
+    :plugins="plugins"
+    @change="handleChange"
+  />
+</template>
+
+<script setup lang="ts">
+import gfm from "@bytemd/plugin-gfm";
+import highlight from "@bytemd/plugin-highlight";
+import { Editor, Viewer } from "@bytemd/vue-next";
+import { ref, withDefaults, defineProps } from "vue";
+
+/**
+ * 定义组件属性类型
+ */
+interface Props {
+  value: string;
+  mode?: string;
+  handleChange: (v: string) => void;
+}
+
+const plugins = [
+  gfm(),
+  highlight(),
+  // Add more plugins here
+];
+
+/**
+ * 给组件指定初始值
+ */
+const props = withDefaults(defineProps<Props>(), {
+  value: () => "",
+  mode: () => "split",
+  handleChange: (v: string) => {
+    console.log(v);
+  },
+});
+</script>
+
+<style>
+.bytemd-toolbar-icon.bytemd-tippy.bytemd-tippy-right:last-child {
+  display: none;
+}
+</style>
+
+```
+
+隐藏编辑器中不需要的操作图标（比如 GitHub 图标）：
+
+```css
+.bytemd-toolbar-icon.bytemd-tippy.bytemd-tippy-right:last-child {
+    display: none;
+}
+```
+
+要把 MdEditor 当前输入的值暴露给父组件，便于父组件去使用，同时也是提高组件的通用性，需要定义属性，把 value 和 handleChange 事件交给父组件去管理：
+
+MdEditor 示例代码：
+
+```vue
+/**
+ * 定义组件属性类型
+ */
+interface Props {
+  value: string;
+  handleChange: (v: string) => void;
+}
+
+/**
+ * 给组件指定初始值
+ */
+const props = withDefaults(defineProps<Props>(), {
+  value: () => "",
+  handleChange: (v: string) => {
+    console.log(v);
+  },
+});
+```
+
+#### 代码编辑器
+
+微软官方编辑器：https://github.com/microsoft/monaco-editor
+
+官方提供的整合教程：https://github.com/microsoft/monaco-editor/blob/main/docs/integrate-esm.md
+
+1）安装编辑器
+
+```shell
+npm install monaco-editor
+```
+
+2）vue-cli 项目（webpack 项目）整合 monaco-editor。
+
+先安装 monaco-editor-webpack-plugin（https://github.com/microsoft/monaco-editor/blob/main/webpack-plugin/README.md）：
+
+```shell
+npm install monaco-editor-webpack-plugin
+```
+
+在 vue.config.js 中配置 webpack 插件：
+
+全量加载：
+
+```typescript
+const { defineConfig } = require("@vue/cli-service");
+const MonacoWebpackPlugin = require("monaco-editor-webpack-plugin");
+
+module.exports = defineConfig({
+  transpileDependencies: true,
+  chainWebpack(config) {
+    config.plugin("monaco").use(new MonacoWebpackPlugin());
+  },
+});
+```
+
+按需加载：
+
+```typescript
+const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin')
+module.exports = {
+  chainWebpack: config => {
+    config.plugin('monaco-editor').use(MonacoWebpackPlugin, [
+      {
+        // Languages are loaded on demand at runtime
+        languages: ['json', 'go', 'css', 'html', 'java', 'javascript', 'less', 'markdown', 'mysql', 'php', 'python', 'scss', 'shell', 'redis', 'sql', 'typescript', 'xml'], // ['abap', 'apex', 'azcli', 'bat', 'cameligo', 'clojure', 'coffee', 'cpp', 'csharp', 'csp', 'css', 'dart', 'dockerfile', 'ecl', 'fsharp', 'go', 'graphql', 'handlebars', 'hcl', 'html', 'ini', 'java', 'javascript', 'json', 'julia', 'kotlin', 'less', 'lexon', 'lua', 'm3', 'markdown', 'mips', 'msdax', 'mysql', 'objective-c', 'pascal', 'pascaligo', 'perl', 'pgsql', 'php', 'postiats', 'powerquery', 'powershell', 'pug', 'python', 'r', 'razor', 'redis', 'redshift', 'restructuredtext', 'ruby', 'rust', 'sb', 'scala', 'scheme', 'scss', 'shell', 'solidity', 'sophia', 'sql', 'st', 'swift', 'systemverilog', 'tcl', 'twig', 'typescript', 'vb', 'xml', 'yaml'],
+
+        features: ['format', 'find', 'contextmenu', 'gotoError', 'gotoLine', 'gotoSymbol', 'hover' , 'documentSymbols'] //['accessibilityHelp', 'anchorSelect', 'bracketMatching', 'caretOperations', 'clipboard', 'codeAction', 'codelens', 'colorPicker', 'comment', 'contextmenu', 'coreCommands', 'cursorUndo', 'dnd', 'documentSymbols', 'find', 'folding', 'fontZoom', 'format', 'gotoError', 'gotoLine', 'gotoSymbol', 'hover', 'iPadShowKeyboard', 'inPlaceReplace', 'indentation', 'inlineHints', 'inspectTokens', 'linesOperations', 'linkedEditing', 'links', 'multicursor', 'parameterHints', 'quickCommand', 'quickHelp', 'quickOutline', 'referenceSearch', 'rename', 'smartSelect', 'snippets', 'suggest', 'toggleHighContrast', 'toggleTabFocusMode', 'transpose', 'unusualLineTerminators', 'viewportSemanticTokens', 'wordHighlighter', 'wordOperations', 'wordPartOperations']
+      }
+    ])
+  }
+}
+```
+
+如何使用 Monaco Editor？查看示例教程：
+
+https://microsoft.github.io/monaco-editor/playground.html?source=v0.40.0#example-creating-the-editor-hello-world
+
+整合教程参考：[http://chart.zhenglinglu.cn/pages/2244bd/#%E5%9C%A8-vue-%E4%B8%AD%E4%BD%BF%E7%94%A8](http://chart.zhenglinglu.cn/pages/2244bd/#在-vue-中使用)
+
+注意，monaco editor 在读写值的时候，要使用 toRaw(编辑器实例）的语法来执行操作，否则会卡死。
+
+示例整合代码如下：
+
+```vue
+<template>
+  <div id="code-editor" ref="codeEditorRef" style="min-height: 400px" />
+  {{ value }}
+  <a-button @click="fillValue">填充值</a-button>
+</template>
+
+<script setup lang="ts">
+import * as monaco from "monaco-editor";
+import { onMounted, ref, toRaw } from "vue";
+
+const codeEditorRef = ref();
+const codeEditor = ref();
+const value = ref("hello world");
+
+const fillValue = () => {
+  if (!codeEditor.value) {
+    return;
+  }
+  // 改变值
+  toRaw(codeEditor.value).setValue("新的值");
+};
+
+onMounted(() => {
+  if (!codeEditorRef.value) {
+    return;
+  }
+  // Hover on each property to see its docs!
+  codeEditor.value = monaco.editor.create(codeEditorRef.value, {
+    value: value.value,
+    language: "java",
+    automaticLayout: true,
+    colorDecorators: true,
+    minimap: {
+      enabled: true,
+    },
+    readOnly: false,
+    theme: "vs-dark",
+    // lineNumbers: "off",
+    // roundedSelection: false,
+    // scrollBeyondLastLine: false,
+  });
+
+  // 编辑 监听内容变化
+  codeEditor.value.onDidChangeModelContent(() => {
+    console.log("目前内容为：", toRaw(codeEditor.value).getValue());
+  });
+});
+</script>
+
+<style scoped></style>
+```
+
+通 Md 编辑器一样，也要接受父组件的传值，把显示的输入交给父组件去控制，从而能够让父组件实时得到用户输入的代码：
+
+```vue
+/**
+ * 定义组件属性类型
+ */
+interface Props {
+  value: string;
+  handleChange: (v: string) => void;
+}
+
+/**
+ * 给组件指定初始值
+ */
+const props = withDefaults(defineProps<Props>(), {
+  value: () => "",
+  handleChange: (v: string) => {
+    console.log(v);
+  },
+});
+```
+
+> 项目扩展：用 diff editor 对比用户代码和标准答案的区别
 
 ## 第三章：代码沙箱实现
 
