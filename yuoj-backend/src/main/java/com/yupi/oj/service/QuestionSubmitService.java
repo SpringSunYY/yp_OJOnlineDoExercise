@@ -2,19 +2,25 @@ package com.yupi.oj.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.yupi.oj.model.dto.question.QuestionQueryRequest;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
+import com.yupi.oj.model.entity.Question;
 import com.yupi.oj.model.entity.QuestionSubmit;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.yupi.oj.model.entity.User;
 import com.yupi.oj.model.vo.QuestionSubmitVO;
+import com.yupi.oj.model.vo.QuestionVO;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
-* @author YY
+* @author 李鱼皮
 * @description 针对表【question_submit(题目提交)】的数据库操作Service
-* @createDate 2024-08-30 20:19:43
+* @createDate 2023-08-07 20:58:53
 */
 public interface QuestionSubmitService extends IService<QuestionSubmit> {
+    
     /**
      * 题目提交
      *

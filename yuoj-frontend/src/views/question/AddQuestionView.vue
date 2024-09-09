@@ -21,7 +21,7 @@
               v-model="form.judgeConfig.timeLimit"
               placeholder="请输入时间限制"
               mode="button"
-              min="0"
+              :min="0"
               size="large"
             />
           </a-form-item>
@@ -30,7 +30,7 @@
               v-model="form.judgeConfig.memoryLimit"
               placeholder="请输入内存限制"
               mode="button"
-              min="0"
+              :min="0"
               size="large"
             />
           </a-form-item>
@@ -39,7 +39,7 @@
               v-model="form.judgeConfig.stackLimit"
               placeholder="请输入堆栈限制"
               mode="button"
-              min="0"
+              :min="0"
               size="large"
             />
           </a-form-item>

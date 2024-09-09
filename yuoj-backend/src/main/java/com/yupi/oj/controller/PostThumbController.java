@@ -8,10 +8,8 @@ import com.yupi.oj.model.dto.postthumb.PostThumbAddRequest;
 import com.yupi.oj.model.entity.User;
 import com.yupi.oj.service.PostThumbService;
 import com.yupi.oj.service.UserService;
-
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,7 +42,7 @@ public class PostThumbController {
      */
     @PostMapping("/")
     public BaseResponse<Integer> doThumb(@RequestBody PostThumbAddRequest postThumbAddRequest,
-                                         HttpServletRequest request) {
+            HttpServletRequest request) {
         if (postThumbAddRequest == null || postThumbAddRequest.getPostId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }

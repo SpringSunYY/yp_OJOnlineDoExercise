@@ -6,6 +6,7 @@ import type { BaseResponse_boolean_ } from "../models/BaseResponse_boolean_";
 import type { BaseResponse_long_ } from "../models/BaseResponse_long_";
 import type { BaseResponse_Page_Question_ } from "../models/BaseResponse_Page_Question_";
 import type { BaseResponse_Page_QuestionVO_ } from "../models/BaseResponse_Page_QuestionVO_";
+import type { BaseResponse_Question_ } from "../models/BaseResponse_Question_";
 import type { BaseResponse_QuestionVO_ } from "../models/BaseResponse_QuestionVO_";
 import type { DeleteRequest } from "../models/DeleteRequest";
 import type { QuestionAddRequest } from "../models/QuestionAddRequest";
@@ -76,6 +77,29 @@ export class QuestionControllerService {
       method: "POST",
       url: "/api/question/edit",
       body: questionEditRequest,
+      errors: {
+        401: `Unauthorized`,
+        403: `Forbidden`,
+        404: `Not Found`,
+      },
+    });
+  }
+
+  /**
+   * getQuestionById
+   * @param id id
+   * @returns BaseResponse_Question_ OK
+   * @throws ApiError
+   */
+  public static getQuestionByIdUsingGet(
+    id?: number
+  ): CancelablePromise<BaseResponse_Question_> {
+    return __request(OpenAPI, {
+      method: "GET",
+      url: "/api/question/get/",
+      query: {
+        id: id,
+      },
       errors: {
         401: `Unauthorized`,
         403: `Forbidden`,
@@ -164,28 +188,6 @@ export class QuestionControllerService {
     return __request(OpenAPI, {
       method: "POST",
       url: "/api/question/my/list/page/vo",
-      body: questionQueryRequest,
-      errors: {
-        401: `Unauthorized`,
-        403: `Forbidden`,
-        404: `Not Found`,
-      },
-    });
-  }
-
-  /**
-   * searchQuestionVOByPage
-   * @param questionQueryRequest questionQueryRequest
-   * @returns BaseResponse_Page_QuestionVO_ OK
-   * @returns any Created
-   * @throws ApiError
-   */
-  public static searchQuestionVoByPageUsingPost(
-    questionQueryRequest: QuestionQueryRequest
-  ): CancelablePromise<BaseResponse_Page_QuestionVO_ | any> {
-    return __request(OpenAPI, {
-      method: "POST",
-      url: "/api/question/search/page/vo",
       body: questionQueryRequest,
       errors: {
         401: `Unauthorized`,

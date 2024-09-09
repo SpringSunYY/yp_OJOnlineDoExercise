@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.oj.common.ErrorCode;
 import com.yupi.oj.constant.CommonConstant;
 import com.yupi.oj.exception.BusinessException;
+import com.yupi.oj.mapper.QuestionSubmitMapper;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
 import com.yupi.oj.model.entity.Question;
@@ -16,7 +17,6 @@ import com.yupi.oj.model.enums.QuestionSubmitStatusEnum;
 import com.yupi.oj.model.vo.QuestionSubmitVO;
 import com.yupi.oj.service.QuestionService;
 import com.yupi.oj.service.QuestionSubmitService;
-import com.yupi.oj.mapper.QuestionSubmitMapper;
 import com.yupi.oj.service.UserService;
 import com.yupi.oj.utils.SqlUtils;
 import org.apache.commons.collections4.CollectionUtils;
@@ -29,13 +29,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
-* @author YY
+* @author 李鱼皮
 * @description 针对表【question_submit(题目提交)】的数据库操作Service实现
-* @createDate 2024-08-30 20:19:43
+* @createDate 2023-08-07 20:58:53
 */
 @Service
 public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper, QuestionSubmit>
     implements QuestionSubmitService{
+    
     @Resource
     private QuestionService questionService;
 
@@ -137,4 +138,10 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         questionSubmitVOPage.setRecords(questionSubmitVOList);
         return questionSubmitVOPage;
     }
+
+
 }
+
+
+
+

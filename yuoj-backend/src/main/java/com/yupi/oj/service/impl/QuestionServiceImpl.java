@@ -8,8 +8,7 @@ import com.yupi.oj.constant.CommonConstant;
 import com.yupi.oj.exception.BusinessException;
 import com.yupi.oj.exception.ThrowUtils;
 import com.yupi.oj.model.dto.question.QuestionQueryRequest;
-import com.yupi.oj.model.entity.Question;
-import com.yupi.oj.model.entity.User;
+import com.yupi.oj.model.entity.*;
 import com.yupi.oj.model.vo.QuestionVO;
 import com.yupi.oj.model.vo.UserVO;
 import com.yupi.oj.service.QuestionService;
@@ -23,19 +22,18 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
-* @author YY
+* @author 李鱼皮
 * @description 针对表【question(题目)】的数据库操作Service实现
-* @createDate 2024-08-30 20:18:54
+* @createDate 2023-08-07 20:58:00
 */
 @Service
 public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question>
     implements QuestionService{
+
 
     @Resource
     private UserService userService;
@@ -155,6 +153,8 @@ public class QuestionServiceImpl extends ServiceImpl<QuestionMapper, Question>
         questionVOPage.setRecords(questionVOList);
         return questionVOPage;
     }
+
+
 }
 
 

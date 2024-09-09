@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import javax.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import cn.hutool.core.collection.CollUtil;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.boot.CommandLineRunner;
 
 /**
@@ -31,7 +31,7 @@ public class FullSyncPostToEs implements CommandLineRunner {
     @Override
     public void run(String... args) {
         List<Post> postList = postService.list();
-        if (CollUtil.isEmpty(postList)) {
+        if (CollectionUtils.isEmpty(postList)) {
             return;
         }
         List<PostEsDTO> postEsDTOList = postList.stream().map(PostEsDTO::objToDto).collect(Collectors.toList());
