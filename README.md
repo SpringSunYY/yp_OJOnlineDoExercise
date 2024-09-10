@@ -1607,7 +1607,7 @@ public class QuestionController {
 
 ```
 
-```
+```java
 package com.yupi.oj.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -1692,10 +1692,8 @@ public class QuestionSubmitController {
 
 
 }
-
-```
-
 8）实现 Service 层的代码，从对应的已经编写好的实现类复制粘贴，全局替换（比如 question => post）
+```
 
 ```java
 package com.yupi.oj.service;
