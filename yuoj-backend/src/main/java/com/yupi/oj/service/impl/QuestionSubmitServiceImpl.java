@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.yupi.oj.common.ErrorCode;
 import com.yupi.oj.constant.CommonConstant;
 import com.yupi.oj.exception.BusinessException;
+import com.yupi.oj.judge.JudgeService;
 import com.yupi.oj.mapper.QuestionSubmitMapper;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitAddRequest;
 import com.yupi.oj.model.dto.questionsubmit.QuestionSubmitQueryRequest;
@@ -22,6 +23,7 @@ import com.yupi.oj.utils.SqlUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -29,19 +31,23 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
-* @author 李鱼皮
-* @description 针对表【question_submit(题目提交)】的数据库操作Service实现
-* @createDate 2023-08-07 20:58:53
-*/
+ * @author 李鱼皮
+ * @description 针对表【question_submit(题目提交)】的数据库操作Service实现
+ * @createDate 2023-08-07 20:58:53
+ */
 @Service
 public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper, QuestionSubmit>
-    implements QuestionSubmitService{
-    
+        implements QuestionSubmitService {
+
     @Resource
     private QuestionService questionService;
 
     @Resource
     private UserService userService;
+
+    @Resource
+    @Lazy
+    private JudgeService judgeService;
 
     /**
      * 提交题目
@@ -76,10 +82,13 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         questionSubmit.setStatus(QuestionSubmitStatusEnum.WAITING.getValue());
         questionSubmit.setJudgeInfo("{}");
         boolean save = this.save(questionSubmit);
-        if (!save){
+        if (!save) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "数据插入失败");
         }
-        return questionSubmit.getId();
+        //执行判题服务
+        Long questionSubmitId = questionSubmit.getId();
+        judgeService.doJudge(questionSubmitId);
+        return questionSubmitId;
     }
 
 

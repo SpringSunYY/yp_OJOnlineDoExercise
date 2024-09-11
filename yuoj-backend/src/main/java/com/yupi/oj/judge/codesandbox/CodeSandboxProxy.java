@@ -10,6 +10,15 @@ public class CodeSandboxProxy implements CodeSandbox {
     private final CodeSandbox codeSandbox;
 
 
+    /**
+     * @description: 代理需要传入参数
+     * @author: YY
+     * @method: CodeSandboxProxy
+     * @date: 2024/9/11 16:39
+     * @param:
+     * @param: codeSandbox
+     * @return:
+     **/
     public CodeSandboxProxy(CodeSandbox codeSandbox) {
         this.codeSandbox = codeSandbox;
     }

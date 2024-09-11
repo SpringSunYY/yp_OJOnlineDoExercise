@@ -3136,7 +3136,7 @@ public class CodeSandboxFactory {
             case "thirdParty":
                 return new ThirdPartyCodeSandbox();
             default:
-                return new ExampleCodeSandbox();
+                return new ExampleCodeSandbox();	
         }
     }
 }
