@@ -5,7 +5,7 @@ import java.util.List;
 import com.yupi.oj.judge.codesandbox.CodeSandbox;
 import com.yupi.oj.judge.codesandbox.model.ExecuteCodeRequest;
 import com.yupi.oj.judge.codesandbox.model.ExecuteCodeResponse;
-import com.yupi.oj.model.dto.questionsubmit.JudgeInfo;
+import com.yupi.oj.judge.codesandbox.model.JudgeInfo;
 import com.yupi.oj.model.enums.JudgeInfoMessageEnum;
 import com.yupi.oj.model.enums.QuestionSubmitStatusEnum;
 

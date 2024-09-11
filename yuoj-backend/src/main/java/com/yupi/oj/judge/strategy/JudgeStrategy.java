@@ -1,6 +1,6 @@
 package com.yupi.oj.judge.strategy;
 
-import com.yupi.oj.model.dto.questionsubmit.JudgeInfo;
+import com.yupi.oj.judge.codesandbox.model.JudgeInfo;
 
 /**
  * @Project: yuoj-backend
@@ -18,7 +18,7 @@ public interface JudgeStrategy {
      * @date: 2024/9/11 17:25
      * @param:
      * @param: judgeContext
-     * @return: com.yupi.oj.model.dto.questionsubmit.JudgeInfo
+     * @return: com.yupi.oj.judge.codesandbox.model.JudgeInfo
      **/
     JudgeInfo doJudge(JudgeContext judgeContext);
 }

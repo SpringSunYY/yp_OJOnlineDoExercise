@@ -1,4 +1,4 @@
-package com.yupi.oj.judge.codesandbox.model;
+package com.yupi.sandbox.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
