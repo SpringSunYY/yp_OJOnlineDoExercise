@@ -2,6 +2,7 @@ package com.yupi.sandbox.utils;
 
 import cn.hutool.core.util.StrUtil;
 import com.yupi.sandbox.model.ExecuteMessage;
+import org.springframework.util.StopWatch;
 
 import java.io.*;
 
@@ -26,6 +27,9 @@ public class ProcessUtils {
     public static ExecuteMessage runProcessAndGetMessage(Process runProcess, String opName) {
         ExecuteMessage executeMessage = new ExecuteMessage();
         try {
+            //执行时间
+            StopWatch stopWatch = new StopWatch();
+            stopWatch.start();
             int exitValue = runProcess.waitFor();
             executeMessage.setExitValue(exitValue);
             //正常退出
@@ -78,6 +82,9 @@ public class ProcessUtils {
     public static ExecuteMessage runInteractProcessAndGetMessage(Process runProcess, String args) {
         ExecuteMessage executeMessage = new ExecuteMessage();
         try {
+            //执行时间
+            StopWatch stopWatch = new StopWatch();
+            stopWatch.start();
             // 向控制台输入程序
             OutputStream outputStream = runProcess.getOutputStream();
             OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);
@@ -102,6 +109,8 @@ public class ProcessUtils {
             outputStream.close();
             inputStream.close();
             runProcess.destroy();
+            stopWatch.stop();
+            executeMessage.setTime(stopWatch.getLastTaskTimeMillis());
         } catch (Exception e) {
             e.printStackTrace();
         }

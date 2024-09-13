@@ -3,10 +3,12 @@ package com.yupi.sandbox;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.dfa.WordTree;
 import com.yupi.sandbox.model.ExecuteCodeRequest;
 import com.yupi.sandbox.model.ExecuteCodeResponse;
 import com.yupi.sandbox.model.ExecuteMessage;
+import com.yupi.sandbox.model.JudgeInfo;
 import com.yupi.sandbox.utils.ProcessUtils;
 
 import java.io.*;
@@ -72,21 +74,84 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
             Process process = Runtime.getRuntime().exec(compileCmd);
             ProcessUtils.runProcessAndGetMessage(process, "编译");
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            return getErrorResponse(e);
+//            throw new RuntimeException(e);
         }
 
+        List<ExecuteMessage> executeMessageList = new ArrayList<>();
+        //运行代码
         for (String inputArgs : inputList) {
             String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
             try {
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
 //                ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
                 ExecuteMessage executeMessage = ProcessUtils.runInteractProcessAndGetMessage(runProcess, inputArgs);
+                executeMessageList.add(executeMessage);
                 System.out.println("executeMessage = " + executeMessage);
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                return getErrorResponse(e);
+                //                throw new RuntimeException(e);
             }
         }
-        return null;
+        //收集整理输出结果
+        ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
+        List<String> outputList = new ArrayList<>();
+        // 取最大值判断用户是否超时
+        long maxTime = 0;
+        for (ExecuteMessage executeMessage : executeMessageList) {
+            //如果错误
+            String errorMessage = executeMessage.getErrorMessage();
+            if (StrUtil.isNotBlank(errorMessage)) {
+                executeCodeResponse.setMessage(errorMessage);
+                //执行中存在错误
+                executeCodeResponse.setStatus(3);
+                break;
+            }
+            Long messageTime = executeMessage.getTime();
+            if (messageTime != null) {
+                maxTime = Math.max(maxTime, messageTime);
+            }
+            outputList.add(executeMessage.getMessage());
+        }
+        executeCodeResponse.setOutputList(outputList);
+        //如果输出和执行长度一样，说明没错，正常
+        if (outputList.size() == executeMessageList.size()) {
+            executeCodeResponse.setStatus(1);
+        }
+
+        JudgeInfo judgeInfo = new JudgeInfo();
+        judgeInfo.setTime(maxTime);
+//        judgeInfo.setMemory();
+        executeCodeResponse.setJudgeInfo(judgeInfo);
+
+        //删除文件
+        if (userCodeFile.getParentFile() != null) {
+            boolean del = FileUtil.del(userCodeParentPath);
+            if (del) {
+                System.out.println("删除成功");
+            } else {
+                System.out.println("删除失败");
+            }
+        }
+        return executeCodeResponse;
+    }
+
+    /**
+     * @description: 获取错误响应
+     * @author: YY
+     * @method: getErrorResponse
+     * @date: 2024/9/13 23:05
+     * @param:
+     * @param: e
+     * @return: com.yupi.sandbox.model.ExecuteCodeResponse
+     **/
+    private ExecuteCodeResponse getErrorResponse(Throwable e) {
+        ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
+        executeCodeResponse.setOutputList(new ArrayList<>());
+        executeCodeResponse.setMessage(e.getMessage());
+        executeCodeResponse.setStatus(2);
+        executeCodeResponse.setJudgeInfo(new JudgeInfo());
+        return executeCodeResponse;
     }
 }
 
