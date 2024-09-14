@@ -4,12 +4,14 @@ package com.yupi.sandbox;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.dfa.FoundWord;
 import cn.hutool.dfa.WordTree;
 import com.yupi.sandbox.model.ExecuteCodeRequest;
 import com.yupi.sandbox.model.ExecuteCodeResponse;
 import com.yupi.sandbox.model.ExecuteMessage;
 import com.yupi.sandbox.model.JudgeInfo;
 import com.yupi.sandbox.utils.ProcessUtils;
+import sun.swing.BakedArrayList;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -57,6 +59,14 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         List<String> inputList = executeCodeRequest.getInputList();
         String code = executeCodeRequest.getCode();
         String language = executeCodeRequest.getLanguage();
+
+        //校验代码 校验代码黑名单
+        FoundWord foundWord = WORD_TREE.matchWord(code);
+        if (foundWord != null) {
+            System.out.println(foundWord.getWord());
+            return null;
+        }
+
         String userDir = System.getProperty("user.dir");
         String globalCodePathName = userDir + File.separator + GLOBAL_CODE_DIR_NAME;
         //判断是否有这个目录
@@ -81,13 +91,25 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
         //运行代码
         for (String inputArgs : inputList) {
+            //限制资源的分配
             String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
             try {
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
+                //超时控制 创建一个守护线程，超时后自动中断
+                new Thread(() -> {
+                    try {
+                        //先睡个超时时间
+                        Thread.sleep(TIME_OUT);
+                        System.out.println("超时了！！！");
+                        runProcess.destroy();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).start();
 //                ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
                 ExecuteMessage executeMessage = ProcessUtils.runInteractProcessAndGetMessage(runProcess, inputArgs);
                 executeMessageList.add(executeMessage);
-                System.out.println("executeMessage = " + executeMessage);
+//                System.out.println("executeMessage = " + executeMessage);
             } catch (IOException e) {
                 return getErrorResponse(e);
                 //                throw new RuntimeException(e);
