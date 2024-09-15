@@ -4,16 +4,14 @@ package com.yupi.sandbox;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.dfa.FoundWord;
 import cn.hutool.dfa.WordTree;
 import com.yupi.sandbox.model.ExecuteCodeRequest;
 import com.yupi.sandbox.model.ExecuteCodeResponse;
 import com.yupi.sandbox.model.ExecuteMessage;
 import com.yupi.sandbox.model.JudgeInfo;
 import com.yupi.sandbox.utils.ProcessUtils;
-import sun.swing.BakedArrayList;
 
-import java.io.*;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -27,7 +25,7 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
 
     private static final long TIME_OUT = 5000L;
 
-    private static final String SECURITY_MANAGER_PATH = "C:\\code\\yuoj-code-sandbox\\src\\main\\resources\\security";
+    private static final String SECURITY_MANAGER_PATH = "E:\\Java\\Code\\Example\\YuPi\\OJ\\OJOnlineDoExercise\\yuoj-code-sandbox\\src\\main\\resources\\security";
 
     private static final String SECURITY_MANAGER_CLASS_NAME = "MySecurityManager";
 
@@ -51,56 +49,60 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
         executeCodeRequest.setCode(code);
         executeCodeRequest.setLanguage("java");
         ExecuteCodeResponse executeCodeResponse = javaNativeCodeSandbox.executeCode(executeCodeRequest);
-        System.out.println(executeCodeResponse);
+        System.out.println("executeCodeResponse" + executeCodeResponse);
     }
 
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
+        //        System.setSecurityManager(new DenySecurityManager());
+
         List<String> inputList = executeCodeRequest.getInputList();
         String code = executeCodeRequest.getCode();
         String language = executeCodeRequest.getLanguage();
 
-        //校验代码 校验代码黑名单
-        FoundWord foundWord = WORD_TREE.matchWord(code);
-        if (foundWord != null) {
-            System.out.println(foundWord.getWord());
-            return null;
-        }
+        //  校验代码中是否包含黑名单中的命令
+//        FoundWord foundWord = WORD_TREE.matchWord(code);
+//        if (foundWord != null) {
+//            System.out.println("包含禁止词：" + foundWord.getFoundWord());
+//            return null;
+//        }
+
+//        1. 把用户的代码保存为文件
 
         String userDir = System.getProperty("user.dir");
         String globalCodePathName = userDir + File.separator + GLOBAL_CODE_DIR_NAME;
-        //判断是否有这个目录
+        // 判断全局代码目录是否存在，没有则新建
         if (!FileUtil.exist(globalCodePathName)) {
             FileUtil.mkdir(globalCodePathName);
         }
-        //把用户的代码隔离存放
-        String userCodeParentPath = globalCodePathName + File.separator + UUID.randomUUID().toString();
+
+        // 把用户的代码隔离存放
+        String userCodeParentPath = globalCodePathName + File.separator + UUID.randomUUID();
         String userCodePath = userCodeParentPath + File.separator + GLOBAL_JAVA_CLASS_NAME;
         File userCodeFile = FileUtil.writeString(code, userCodePath, StandardCharsets.UTF_8);
 
-        //编译代码，得到class文件
+//        2. 编译代码，得到 class 文件
         String compileCmd = String.format("javac -encoding utf-8 %s", userCodeFile.getAbsolutePath());
         try {
-            Process process = Runtime.getRuntime().exec(compileCmd);
-            ProcessUtils.runProcessAndGetMessage(process, "编译");
+            Process compileProcess = Runtime.getRuntime().exec(compileCmd);
+            ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
+            System.out.println(executeMessage);
         } catch (Exception e) {
             return getErrorResponse(e);
-//            throw new RuntimeException(e);
         }
 
+        // 3. 执行代码，得到输出结果
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
-        //运行代码
         for (String inputArgs : inputList) {
-            //限制资源的分配
-            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
+//            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
+            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security.manager=%s Main %s", userCodeParentPath, SECURITY_MANAGER_PATH, SECURITY_MANAGER_CLASS_NAME, inputArgs);
             try {
                 Process runProcess = Runtime.getRuntime().exec(runCmd);
-                //超时控制 创建一个守护线程，超时后自动中断
+                // 超时控制
                 new Thread(() -> {
                     try {
-                        //先睡个超时时间
                         Thread.sleep(TIME_OUT);
-                        System.out.println("超时了！！！");
+                        System.out.println("超时了，中断");
                         runProcess.destroy();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -108,52 +110,48 @@ public class JavaNativeCodeSandbox implements CodeSandbox {
                 }).start();
 //                ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(runProcess, "运行");
                 ExecuteMessage executeMessage = ProcessUtils.runInteractProcessAndGetMessage(runProcess, inputArgs);
+                System.out.println(executeMessage);
                 executeMessageList.add(executeMessage);
-//                System.out.println("executeMessage = " + executeMessage);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 return getErrorResponse(e);
-                //                throw new RuntimeException(e);
             }
         }
-        //收集整理输出结果
+
+//        4. 收集整理输出结果
         ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
         List<String> outputList = new ArrayList<>();
-        // 取最大值判断用户是否超时
+        // 取用时最大值，便于判断是否超时
         long maxTime = 0;
         for (ExecuteMessage executeMessage : executeMessageList) {
-            //如果错误
             String errorMessage = executeMessage.getErrorMessage();
             if (StrUtil.isNotBlank(errorMessage)) {
                 executeCodeResponse.setMessage(errorMessage);
-                //执行中存在错误
+                // 用户提交的代码执行中存在错误
                 executeCodeResponse.setStatus(3);
                 break;
             }
-            Long messageTime = executeMessage.getTime();
-            if (messageTime != null) {
-                maxTime = Math.max(maxTime, messageTime);
-            }
             outputList.add(executeMessage.getMessage());
+            Long time = executeMessage.getTime();
+            if (time != null) {
+                maxTime = Math.max(maxTime, time);
+            }
         }
-        executeCodeResponse.setOutputList(outputList);
-        //如果输出和执行长度一样，说明没错，正常
+        // 正常运行完成
         if (outputList.size() == executeMessageList.size()) {
             executeCodeResponse.setStatus(1);
         }
-
+        executeCodeResponse.setOutputList(outputList);
         JudgeInfo judgeInfo = new JudgeInfo();
         judgeInfo.setTime(maxTime);
+        // 要借助第三方库来获取内存占用，非常麻烦，此处不做实现
 //        judgeInfo.setMemory();
+
         executeCodeResponse.setJudgeInfo(judgeInfo);
 
-        //删除文件
+//        5. 文件清理
         if (userCodeFile.getParentFile() != null) {
             boolean del = FileUtil.del(userCodeParentPath);
-            if (del) {
-                System.out.println("删除成功");
-            } else {
-                System.out.println("删除失败");
-            }
+            System.out.println("删除" + (del ? "成功" : "失败"));
         }
         return executeCodeResponse;
     }
