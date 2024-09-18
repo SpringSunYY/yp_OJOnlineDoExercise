@@ -4480,7 +4480,7 @@ sudo docker rmi hello-world -f
 先引入依赖：
 
 ```xml
-xml复制代码<!-- https://mvnrepository.com/artifact/com.github.docker-java/docker-java -->
+<!-- https://mvnrepository.com/artifact/com.github.docker-java/docker-java -->
 <dependency>
     <groupId>com.github.docker-java</groupId>
     <artifactId>docker-java</artifactId>
