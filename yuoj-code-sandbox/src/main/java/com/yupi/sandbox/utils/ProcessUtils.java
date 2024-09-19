@@ -26,7 +26,7 @@ public class ProcessUtils {
      **/
     public static ExecuteMessage runProcessAndGetMessage(Process runProcess, String opName) {
         ExecuteMessage executeMessage = new ExecuteMessage();
-
+        System.out.println(opName);
         try {
             StopWatch stopWatch = new StopWatch();
             stopWatch.start();

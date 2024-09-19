@@ -11,7 +11,9 @@ import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.PullResponseItem;
 import com.github.dockerjava.api.model.Volume;
+import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientBuilder;
+import com.github.dockerjava.core.DockerClientConfig;
 import com.yupi.sandbox.model.ExecuteCodeRequest;
 import com.yupi.sandbox.model.ExecuteCodeResponse;
 import com.yupi.sandbox.model.ExecuteMessage;
@@ -24,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -34,7 +37,7 @@ import java.util.UUID;
  * @Description: JavaDockerCodeSandbox
  * @Version: 1.0
  */
-public class JavaDockerCodeSandbox implements CodeSandbox{
+public class JavaDockerCodeSandbox implements CodeSandbox {
     private static final String GLOBAL_CODE_DIR_NAME = "tmpCode";
 
     private static final String GLOBAL_JAVA_CLASS_NAME = "Main.java";
@@ -46,8 +49,9 @@ public class JavaDockerCodeSandbox implements CodeSandbox{
     private static final String SECURITY_MANAGER_CLASS_NAME = "MySecurityManager";
 
     private static final Boolean FIRST_INIT = true;
+
     public static void main(String[] args) {
-        JavaDockerCodeSandbox javaNativeCodeSandbox = new JavaDockerCodeSandbox();
+        JavaDockerCodeSandbox javaDockerCodeSandbox = new JavaDockerCodeSandbox();
         ExecuteCodeRequest executeCodeRequest = new ExecuteCodeRequest();
         executeCodeRequest.setInputList(Arrays.asList("1 2", "1 3"));
         String code = ResourceUtil.readStr("testCode/simpleComputeArgs/Main.java", StandardCharsets.UTF_8);
@@ -55,20 +59,19 @@ public class JavaDockerCodeSandbox implements CodeSandbox{
 //        String code = ResourceUtil.readStr("testCode/simpleCompute/Main.java", StandardCharsets.UTF_8);
         executeCodeRequest.setCode(code);
         executeCodeRequest.setLanguage("java");
-        ExecuteCodeResponse executeCodeResponse = javaNativeCodeSandbox.executeCode(executeCodeRequest);
+        ExecuteCodeResponse executeCodeResponse = javaDockerCodeSandbox.executeCode(executeCodeRequest);
         System.out.println(executeCodeResponse);
     }
 
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
 //        System.setSecurityManager(new DenySecurityManager());
-
+        System.out.println("开始执行");
         List<String> inputList = executeCodeRequest.getInputList();
         String code = executeCodeRequest.getCode();
         String language = executeCodeRequest.getLanguage();
 
-//        1. 把用户的代码保存为文件
-
+        //1. 把用户的代码保存为文件
         String userDir = System.getProperty("user.dir");
         String globalCodePathName = userDir + File.separator + GLOBAL_CODE_DIR_NAME;
         // 判断全局代码目录是否存在，没有则新建
@@ -80,24 +83,31 @@ public class JavaDockerCodeSandbox implements CodeSandbox{
         String userCodeParentPath = globalCodePathName + File.separator + UUID.randomUUID();
         String userCodePath = userCodeParentPath + File.separator + GLOBAL_JAVA_CLASS_NAME;
         File userCodeFile = FileUtil.writeString(code, userCodePath, StandardCharsets.UTF_8);
+        /**
+         {
+         "registry-mirrors": ["https://6kx4zyno.mirror.aliyuncs.com","https://docker.mirrors.ustc.edu.cn/","https://akchsmlh.mirror.aliyuncs.com"]
+               }**/
 
-//        2. 编译代码，得到 class 文件
+                //2. 编译代码，得到 class 文件
+        System.out.println("编译代码");
+        System.out.println(userCodeFile.getAbsolutePath());
         String compileCmd = String.format("javac -encoding utf-8 %s", userCodeFile.getAbsolutePath());
         try {
             Process compileProcess = Runtime.getRuntime().exec(compileCmd);
             ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
             System.out.println(executeMessage);
         } catch (Exception e) {
+            e.printStackTrace();
             return getErrorResponse(e);
         }
 
         // 3. 创建容器，把文件复制到容器内
         // 获取默认的 Docker Client
         DockerClient dockerClient = DockerClientBuilder.getInstance().build();
-
         // 拉取镜像
         String image = "openjdk:8-alpine";
         if (FIRST_INIT) {
+            System.out.println("拉取镜像");
             PullImageCmd pullImageCmd = dockerClient.pullImageCmd(image);
             PullImageResultCallback pullImageResultCallback = new PullImageResultCallback() {
                 @Override
@@ -115,11 +125,9 @@ public class JavaDockerCodeSandbox implements CodeSandbox{
                 throw new RuntimeException(e);
             }
         }
-
         System.out.println("下载完成");
 
         // 创建容器
-
         CreateContainerCmd containerCmd = dockerClient.createContainerCmd(image);
         HostConfig hostConfig = new HostConfig();
         hostConfig.withMemory(100 * 1000 * 1000L);
