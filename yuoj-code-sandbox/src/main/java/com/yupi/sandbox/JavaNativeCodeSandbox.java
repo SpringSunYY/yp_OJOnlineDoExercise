@@ -2,6 +2,7 @@ package com.yupi.sandbox;
 
 import com.yupi.sandbox.model.ExecuteCodeRequest;
 import com.yupi.sandbox.model.ExecuteCodeResponse;
+import org.springframework.stereotype.Component;
 
 /**
  * @Project: yuoj-code-sandbox
@@ -11,6 +12,7 @@ import com.yupi.sandbox.model.ExecuteCodeResponse;
  * @Description: JavaNativeCodeSandbox java原生实现，直接复用模版方法
  * @Version: 1.0
  */
+@Component
 public class JavaNativeCodeSandbox extends JavaCodeSandboxTemplate {
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {

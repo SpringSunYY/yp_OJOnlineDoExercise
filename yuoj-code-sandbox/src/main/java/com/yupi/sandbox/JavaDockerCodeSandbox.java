@@ -12,6 +12,7 @@ import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.yupi.sandbox.model.ExecuteCodeRequest;
 import com.yupi.sandbox.model.ExecuteCodeResponse;
 import com.yupi.sandbox.model.ExecuteMessage;
+import org.springframework.stereotype.Component;
 
 import java.io.Closeable;
 import java.io.File;
@@ -30,6 +31,7 @@ import java.util.concurrent.TimeUnit;
  * @Description: JavaDockerCodeSandbox java docker实现，重写runFile
  * @Version: 1.0
  */
+@Component
 public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate{
     private static final long TIME_OUT = 5000L;
 
@@ -92,7 +94,7 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate{
         hostConfig.withMemory(100 * 1000 * 1000L);
         hostConfig.withMemorySwap(0L);
         hostConfig.withCpuCount(1L);
-        hostConfig.withSecurityOpts(Arrays.asList("seccomp=安全管理配置字符串"));
+//        hostConfig.withSecurityOpts(Arrays.asList("seccomp=安全管理配置字符串"));
         hostConfig.setBinds(new Bind(userCodeParentPath, new Volume("/app")));
         CreateContainerResponse createContainerResponse = containerCmd
                 .withHostConfig(hostConfig)
