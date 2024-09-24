@@ -5323,7 +5323,7 @@ spring.session.store-type: redis
    1. 注册（后端已实现）
    2. 登录（后端已实现，前端已实现）
    3. 用户管理
-2. 题目服务（yuoj-backend-question-service：8103）
+2. 题目服务（yuoj-backend-question-service：8103端口）
    1. 创建题目（管理员）
    2. 删除题目（管理员）
    3. 修改题目（管理员）
@@ -6089,7 +6089,7 @@ public class MyMessageConsumer {
 
 > 扩展：处理消息重试，避免消息积压 扩展：压力测试，验证
 
-## 本期成果
+### 本期成果
 
 1. 完成微服务项目改造
 2. 浏览题目提交列表页面
