@@ -1,8 +1,8 @@
 package com.yy.ojbackendmodel.vo;
 
 import cn.hutool.json.JSONUtil;
-import com.yupi.oj.model.dto.question.JudgeConfig;
-import com.yupi.oj.model.entity.Question;
+import com.yy.ojbackendmodel.dto.question.JudgeConfig;
+import com.yy.ojbackendmodel.entity.Question;
 import lombok.Data;
 import org.springframework.beans.BeanUtils;
 

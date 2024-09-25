@@ -1,16 +1,13 @@
-package com.yy.ojbackendquestionservice.service;
+package com.yy.ojbackendserviceclient.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.yy.ojbackendmodel.dto.question.QuestionQueryRequest;
 import com.yy.ojbackendmodel.dto.questionsubmit.QuestionSubmitAddRequest;
 import com.yy.ojbackendmodel.dto.questionsubmit.QuestionSubmitQueryRequest;
-import com.yy.ojbackendmodel.entity.Question;
 import com.yy.ojbackendmodel.entity.QuestionSubmit;
 import com.yy.ojbackendmodel.entity.User;
 import com.yy.ojbackendmodel.vo.QuestionSubmitVO;
-import com.yy.ojbackendmodel.vo.QuestionVO;
 
 /**
 * @author YY

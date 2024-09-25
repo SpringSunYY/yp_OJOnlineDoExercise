@@ -1,4 +1,4 @@
-package com.yy.ojbackenduserservice;
+package com.yy.ojbackendjudgeservice;
 
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
@@ -8,14 +8,13 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication()
-@MapperScan("com.yy.ojbackenduserservice.mapper")
 @EnableScheduling
 @EnableAspectJAutoProxy(proxyTargetClass = true, exposeProxy = true)
 @ComponentScan("com.yy")
-public class OjBackendUserServiceApplication {
+public class OjBackendJudgeServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(OjBackendUserServiceApplication.class, args);
+        SpringApplication.run(OjBackendJudgeServiceApplication.class, args);
     }
 
 }
