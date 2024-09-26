@@ -30,7 +30,7 @@ import java.util.List;
 
  */
 @RestController
-@RequestMapping("/user")
+@RequestMapping("/")
 @Slf4j
 public class UserController {
 

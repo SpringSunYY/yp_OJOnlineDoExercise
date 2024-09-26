@@ -21,18 +21,13 @@
     <dependencies>
         <dependency>
             <groupId>com.yy</groupId>
-            <artifactId>oj-backend-model</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>com.yy</groupId>
             <artifactId>oj-backend-common</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
-            <version>3.1.5</version>
+            <groupId>com.yy</groupId>
+            <artifactId>oj-backend-model</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -41,6 +36,7 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
+            <version>3.1.5</version>
         </dependency>
 
         <dependency>
