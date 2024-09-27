@@ -5,15 +5,15 @@ spring:
         server-addr: 127.0.0.1:8848
     gateway:
       routes:
-        - id: yuoj-backend-user-service
+        - id: oj-backend-user-service
           uri: lb://oj-backend-user-service
           predicates:
             - Path=/api/user/**
-        - id: yuoj-backend-question-service
+        - id: oj-backend-question-service
           uri: lb://oj-backend-question-service
           predicates:
             - Path=/api/question/**
-        - id: yuoj-backend-judge-service
+        - id: oj-backend-judge-service
           uri: lb://oj-backend-judge-service
           predicates:
             - Path=/api/judge/**
