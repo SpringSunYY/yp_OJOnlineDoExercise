@@ -17,6 +17,7 @@ import com.yy.ojbackendmodel.enums.QuestionSubmitLanguageEnum;
 import com.yy.ojbackendmodel.enums.QuestionSubmitStatusEnum;
 import com.yy.ojbackendmodel.vo.QuestionSubmitVO;
 import com.yy.ojbackendquestionservice.mapper.QuestionSubmitMapper;
+import com.yy.ojbackendquestionservice.rabbitmq.MyMessageProducer;
 import com.yy.ojbackendquestionservice.service.QuestionService;
 import com.yy.ojbackendquestionservice.service.QuestionSubmitService;
 import com.yy.ojbackendserviceclient.service.JudgeFeignClient;
@@ -29,6 +30,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -49,6 +51,9 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
     @Resource
     @Lazy
     private JudgeFeignClient judgeFeignClient;
+
+    @Resource
+    private MyMessageProducer myMessageProducer;
 
     /**
      * 提交题目
@@ -86,9 +91,13 @@ public class QuestionSubmitServiceImpl extends ServiceImpl<QuestionSubmitMapper,
         if (!save) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "数据插入失败");
         }
-        //执行判题服务
         Long questionSubmitId = questionSubmit.getId();
-        judgeFeignClient.doJudge(questionSubmitId);
+        //发送消息执行判题服务
+        myMessageProducer.sendMessage("code_exchange","my_routingKey",String.valueOf(questionSubmitId));
+        //执行判题服务
+//        CompletableFuture.runAsync(()->{
+//            judgeFeignClient.doJudge(questionSubmitId);
+//        });
         return questionSubmitId;
     }
 

@@ -1,5 +1,6 @@
 package com.yy.ojbackendjudgeservice;
 
+import com.yy.ojbackendjudgeservice.rabbitmq.InitRabbitMq;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
@@ -18,6 +19,8 @@ public class OjBackendJudgeServiceApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(OjBackendJudgeServiceApplication.class, args);
+        //启动就启动mq
+        InitRabbitMq.doInit();
     }
 
 }

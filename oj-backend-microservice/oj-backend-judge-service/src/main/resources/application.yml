@@ -4,9 +4,9 @@
 spring:
   application:
     name: oj-backend-judge-service
-#  # 默认 dev 环境
-#  profiles:
-#    active: dev
+  #  # 默认 dev 环境
+  #  profiles:
+  #    active: dev
   # 支持 swagger3
   mvc:
     pathmatch:
@@ -29,7 +29,7 @@ spring:
     host: 192.168.10.100
     port: 6379
     timeout: 5000
-#    password: 123456
+  #    password: 123456
   servlet:
     multipart:
       # 大小限制
@@ -39,6 +39,11 @@ spring:
     nacos:
       discovery:
         server-addr: 127.0.0.1:8848
+  rabbitmq:
+    host: 192.168.10.100
+    port: 5672
+    password: guest
+    username: guest
 server:
   address: 0.0.0.0
   port: 8104
@@ -61,7 +66,7 @@ mybatis-plus:
 
 # 代码沙箱配置
 codesandbox:
-  type: remote
+  type: example
 
 knife4j:
   enable: true
